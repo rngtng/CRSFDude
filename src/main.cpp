@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include "driver/uart.h"
+#include "driver/gpio.h"
+#include "hal/uart_ll.h"
 
 // CRSF Protocol
 #define CRSF_SYNC_BYTE        0xC8
@@ -10,9 +12,11 @@
 #define CRSF_BAUD             420000
 #define CRSF_RC_CHANNELS      0x16
 
-// Pin Config
-#define CRSF_RX_PIN 20
-#define CRSF_TX_PIN 20
+// Single-wire half-duplex on pin 20
+#define CRSF_PIN 20
+
+// Constant to disconnect RX from pin (routes LOW to UART RX input)
+#define MATRIX_DETACH_IN_LOW 0x30
 
 // CRC
 static uint8_t crc8tab[256];
@@ -44,6 +48,25 @@ static inline bool isSyncByte(uint8_t b)
     return b == CRSF_SYNC_BYTE || b == CRSF_SYNC_BYTE_TX;
 }
 
+// Half-duplex switching via GPIO matrix (from ExpressLRS)
+// Key: use gpio_matrix for inversion, NOT uart_set_line_inverse
+static void duplex_set_RX()
+{
+    gpio_set_direction((gpio_num_t)CRSF_PIN, GPIO_MODE_INPUT);
+    gpio_matrix_in((gpio_num_t)CRSF_PIN, U1RXD_IN_IDX, true); // inverted
+    gpio_pulldown_en((gpio_num_t)CRSF_PIN);
+    gpio_pullup_dis((gpio_num_t)CRSF_PIN);
+}
+
+static void duplex_set_TX()
+{
+    gpio_set_pull_mode((gpio_num_t)CRSF_PIN, GPIO_FLOATING);
+    gpio_set_level((gpio_num_t)CRSF_PIN, 0);
+    gpio_set_direction((gpio_num_t)CRSF_PIN, GPIO_MODE_OUTPUT);
+    gpio_matrix_in(MATRIX_DETACH_IN_LOW, U1RXD_IN_IDX, false); // disconnect RX
+    gpio_matrix_out((gpio_num_t)CRSF_PIN, U1TXD_OUT_IDX, true, false); // TX inverted
+}
+
 // RC Channels (packed 11-bit)
 static uint16_t channels[4];
 
@@ -57,46 +80,33 @@ static void decodeChannels(const uint8_t *p)
 
 static uint32_t txCount = 0;
 
-// Half-duplex: use separate TX pin, keep RX working via uart_set_line_inverse
-// TX pin directly wired to same CRSF line as RX pin
-#define CRSF_TX_OUT_PIN 21  // Use a separate GPIO for TX output
-
 static void crsfSend(const uint8_t *buf, uint8_t len)
 {
-    // Temporarily enable TX inversion, send, then restore RX-only
-    // Re-apply full config each time to avoid state corruption
-    uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV);
-
-    size_t written = CrsfSerial.write(buf, len);
+    duplex_set_TX();
+    CrsfSerial.write(buf, len);
     CrsfSerial.flush();
-    delayMicroseconds(200); // ensure last byte fully clocked out
-
-    uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV);
-
-    // Flush garbage from RX buffer caused by seeing our own TX
+    while (!uart_ll_is_tx_idle(UART_LL_GET_HW(1))) {}
+    duplex_set_RX();
+    delayMicroseconds(100); // let pin settle back to input
     while (CrsfSerial.available()) CrsfSerial.read();
-
-    if (written > 0) txCount++;
+    txCount++;
 }
 
 static void sendBatteryTelemetry()
 {
-    // CRSF Battery Sensor frame (0x08)
-    // Payload: voltage(2) current(2) capacity(3) remaining(1) = 8 bytes
     uint8_t buffer[12];
-    buffer[0]  = 0xC8;          // Sync
-    buffer[1]  = 10;            // Length: type(1) + payload(8) + crc(1)
-    buffer[2]  = 0x08;          // Type: Battery
-    buffer[3]  = 0x00;          // Voltage high (11.1V = 111 in 0.1V units)
-    buffer[4]  = 111;           // Voltage low
-    buffer[5]  = 0x00;          // Current high (1.5A = 15 in 0.1A units)
-    buffer[6]  = 15;            // Current low
-    buffer[7]  = 0x00;          // Used capacity byte 2
-    buffer[8]  = 0x00;          // Used capacity byte 1
-    buffer[9]  = 100;           // Used capacity byte 0 (100 mAh)
+    buffer[0]  = 0xC8;
+    buffer[1]  = 10;
+    buffer[2]  = 0x08;          // Battery
+    buffer[3]  = 0x00;          // Voltage high
+    buffer[4]  = 111;           // Voltage low (11.1V)
+    buffer[5]  = 0x00;          // Current high
+    buffer[6]  = 15;            // Current low (1.5A)
+    buffer[7]  = 0x00;
+    buffer[8]  = 0x00;
+    buffer[9]  = 100;           // Used capacity (100 mAh)
     buffer[10] = 75;            // Remaining %
     buffer[11] = crc8_calc(&buffer[2], 9);
-
     crsfSend(buffer, 12);
 }
 
@@ -104,33 +114,27 @@ static void sendFlightMode()
 {
     static uint32_t lastToggleTime = 0;
     static bool isSignalOn = false;
-
     uint32_t now = millis();
     if (now - lastToggleTime >= 2000) {
         isSignalOn = !isSignalOn;
         lastToggleTime = now;
     }
-
     const char* mode = isSignalOn ? "ON" : "OFF";
     uint8_t strLen = strlen(mode) + 1;
     uint8_t frameLen = 1 + strLen + 1;
-
     uint8_t buffer[32];
     buffer[0] = 0xC8;
     buffer[1] = frameLen;
-    buffer[2] = 0x21;           // Type: Flight Mode
+    buffer[2] = 0x21;
     memcpy(&buffer[3], mode, strLen);
     buffer[3 + strLen] = crc8_calc(&buffer[2], strLen + 1);
-
     crsfSend(buffer, 3 + strLen + 1);
 }
 
 static void replyWithTelemetry()
 {
-    sendBatteryTelemetry();
     sendFlightMode();
 }
-// -------------------------------------
 
 // Parser
 static uint8_t inBuffer[CRSF_MAX_PACKET_LEN];
@@ -183,9 +187,7 @@ static void handleInput()
             {
                 pktCount++;
                 decodeChannels(&inBuffer[3]);
-
-                // Telemetry disabled for debugging
-                // replyWithTelemetry();
+                replyWithTelemetry();
             }
         }
 
@@ -204,10 +206,11 @@ void setup()
     Serial.println("CRSFDude starting...");
 
     crc8_init();
-    CrsfSerial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_RX_PIN, CRSF_RX_PIN);
+    // Init UART with pin 20 for both RX/TX, NO uart_set_line_inverse
+    CrsfSerial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_PIN, CRSF_PIN);
     CrsfSerial.setTimeout(0);
-    // Only invert RX at startup — TX inversion toggled per-send
-    uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV);
+    // Use GPIO matrix for RX inversion (not uart_set_line_inverse)
+    duplex_set_RX();
 
     lastReportTime = millis();
 }
