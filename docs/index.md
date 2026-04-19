@@ -26,12 +26,19 @@ void loop() {
     if (crsf.update()) {
         uint16_t throttle = crsf.getChannel(2);
         crsf.sendFlightMode("ACRO");
+        crsf.sendBattery(111, 15, 1200, 75);  // 11.1V, 1.5A, 1200mAh, 75%
+        crsf.sendAttitude(1500, -300, 0);      // pitch 0.15rad, roll -0.03rad
     }
 }
 ```
 
-## Key Learnings
+## Telemetry Types
 
-1. **JR bay CRSF is inverted** — hardware inverter on the radio, wire idles LOW
-2. **ESP32-C3 half-duplex = GPIO matrix switching** — `gpio_reset_pin()` required to release TX
-3. **EdgeTX Device Ping handshake is mandatory** — respond to 0x28 with 0x29 or the radio freezes
+| Method | EdgeTX Sensor |
+|--------|---------------|
+| `sendFlightMode("ACRO")` | FM (top bar) |
+| `sendBattery(V, A, mAh, %)` | VBAT, Curr, Capa, Bat% |
+| `sendGPS(lat, lon, spd, hdg, alt, sats)` | GPS, GSpd, Hdg, GAlt, Sats |
+| `sendAttitude(pitch, roll, yaw)` | Ptch, Roll, Yaw |
+| `sendBaroAltitude(cm)` | Alt |
+| `sendVario(cm/s)` | VSpd |

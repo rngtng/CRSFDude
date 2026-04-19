@@ -61,9 +61,14 @@ void loop() {
 |--------|-------------|
 | `begin(pin, baud)` | Initialize half-duplex UART |
 | `update()` | Parse incoming frames, returns `true` on new RC data |
-| `getChannel(ch)` | Read channel value (0-15, 11-bit) |
-| `sendFlightMode(str)` | Send flight mode telemetry |
-| `sendDeviceInfo(name)` | Send device info (auto-called on Device Ping) |
+| `getChannel(ch)` | Read channel value (0-15, 11-bit, 0-2047) |
+| `sendFlightMode(mode)` | Flight mode string (shows in EdgeTX top bar) |
+| `sendBattery(V, A, mAh, %)` | Battery voltage (0.1V), current (0.1A), capacity, remaining |
+| `sendGPS(lat, lon, spd, hdg, alt, sats)` | GPS: degrees*1e7, cm/s, deg*100, meters, count |
+| `sendAttitude(pitch, roll, yaw)` | Attitude in radians*10000 |
+| `sendBaroAltitude(cm)` | Barometric altitude in centimeters |
+| `sendVario(cm/s)` | Vertical speed in cm/s |
+| `sendDeviceInfo(name)` | Device info (auto-called on Device Ping) |
 | `sendFrame(buf, len)` | Send raw CRSF frame |
 
 ## Key Learnings

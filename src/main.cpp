@@ -7,8 +7,6 @@
 CRSFProtocol crsf;
 
 static uint32_t lastReportTime = 0;
-static uint32_t lastFlightModeToggle = 0;
-static bool flightModeOn = false;
 
 void setup()
 {
@@ -24,14 +22,14 @@ void loop()
 {
     bool newChannels = crsf.update();
 
-    // Send flight mode telemetry every 5th RC packet
+    // Send telemetry every 5th RC packet
     if (newChannels && crsf.rxPacketCount % 5 == 0) {
-        uint32_t now = millis();
-        if (now - lastFlightModeToggle >= 2000) {
-            flightModeOn = !flightModeOn;
-            lastFlightModeToggle = now;
-        }
-        crsf.sendFlightMode(flightModeOn ? "ON" : "OFF");
+        crsf.sendFlightMode("ACRO");
+        crsf.sendBattery(111, 15, 1200, 75);          // 11.1V, 1.5A, 1200mAh, 75%
+        crsf.sendAttitude(1500, -300, 0);              // pitch 0.15rad, roll -0.03rad
+        crsf.sendGPS(524213670, 133560120, 250, 18000, 120, 12); // Berlin, 2.5m/s, 180°, 120m, 12 sats
+        crsf.sendBaroAltitude(12034);                  // 120.34m
+        crsf.sendVario(150);                           // 1.5m/s climb
     }
 
     // Report once per second
