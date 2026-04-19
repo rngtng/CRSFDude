@@ -91,13 +91,20 @@ bool CRSFProtocol::update()
         if (_parseBufferLen < totalLength) break;
 
         if (crc8(&_parseBuffer[2], totalLength - 3) == _parseBuffer[totalLength - 1]) {
-            processFrame(_parseBuffer[2], totalLength);
-            if (_parseBuffer[2] == CRSF_FRAMETYPE_RC_CHANNELS) gotChannels = true;
+            uint8_t frameType = _parseBuffer[2];
+            processFrame(frameType, totalLength);
+            if (frameType == CRSF_FRAMETYPE_RC_CHANNELS) gotChannels = true;
         }
 
-        uint8_t remaining = _parseBufferLen - totalLength;
-        if (remaining > 0) memmove(_parseBuffer, _parseBuffer + totalLength, remaining);
-        _parseBufferLen = remaining;
+        // sendFrame() inside processFrame() zeroes _parseBufferLen, so
+        // use totalLength against the pre-call length to advance safely.
+        if (_parseBufferLen >= totalLength) {
+            uint8_t remaining = _parseBufferLen - totalLength;
+            if (remaining > 0) memmove(_parseBuffer, _parseBuffer + totalLength, remaining);
+            _parseBufferLen = remaining;
+        } else {
+            _parseBufferLen = 0;
+        }
     }
 
     return gotChannels;
