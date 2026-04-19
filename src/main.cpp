@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "driver/uart.h"
 #include "driver/gpio.h"
+#include "soc/uart_struct.h"
 
 // CRSF Protocol
 #define CRSF_SYNC_BYTE        0xC8
@@ -44,21 +45,23 @@ static inline bool isSyncByte(uint8_t b)
     return b == CRSF_SYNC_BYTE || b == CRSF_SYNC_BYTE_TX;
 }
 
-// GPIO matrix half-duplex — ALL inversion at GPIO matrix level, none at UART
-static void duplex_set_RX()
+// GPIO matrix half-duplex — modeled after mLRS JR Pin5 implementation
+// ALL inversion at GPIO matrix level, none at UART
+static void IRAM_ATTR duplex_set_RX()
 {
     gpio_set_direction((gpio_num_t)CRSF_PIN, GPIO_MODE_INPUT);
-    gpio_matrix_in((gpio_num_t)CRSF_PIN, U1RXD_IN_IDX, true); // inverted at matrix
-    gpio_pulldown_en((gpio_num_t)CRSF_PIN);
-    gpio_pullup_dis((gpio_num_t)CRSF_PIN);
+    gpio_set_pull_mode((gpio_num_t)CRSF_PIN, GPIO_PULLDOWN_ONLY); // permanent pulldown per mLRS
+    gpio_matrix_in((gpio_num_t)CRSF_PIN, U1RXD_IN_IDX, true);    // inverted at matrix
+    // Hardware FIFO reset to discard ghost bytes from TX→RX switch
+    UART1.conf0.rxfifo_rst = 1;
+    UART1.conf0.rxfifo_rst = 0;
 }
 
-static void duplex_set_TX()
+static void IRAM_ATTR duplex_set_TX()
 {
-    gpio_set_pull_mode((gpio_num_t)CRSF_PIN, GPIO_FLOATING);
-    gpio_set_level((gpio_num_t)CRSF_PIN, 0);
+    gpio_matrix_in(MATRIX_DETACH_IN_LOW, U1RXD_IN_IDX, false);   // disconnect RX first
+    gpio_set_level((gpio_num_t)CRSF_PIN, 0);                      // inverted idle
     gpio_set_direction((gpio_num_t)CRSF_PIN, GPIO_MODE_OUTPUT);
-    gpio_matrix_in(MATRIX_DETACH_IN_LOW, U1RXD_IN_IDX, false);
     gpio_matrix_out((gpio_num_t)CRSF_PIN, U1TXD_OUT_IDX, true, false); // inverted at matrix
 }
 
@@ -85,9 +88,7 @@ static void crsfSend(const uint8_t *buf, uint8_t len)
     duplex_set_TX();
     uart_write_bytes(UART_NUM_1, (const char *)buf, len);
     uart_wait_tx_done(UART_NUM_1, pdMS_TO_TICKS(50));
-    delayMicroseconds(200);
-    duplex_set_RX();
-    while (CrsfSerial.available()) CrsfSerial.read();
+    duplex_set_RX();  // switches to input + FIFO reset
     bufferPtr = 0;
     txCount++;
 }
