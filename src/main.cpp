@@ -110,6 +110,37 @@ static void crsfSend(const uint8_t *buf, uint8_t len)
     txCount++;
 }
 
+// Respond to Device Ping with Device Info — required for CRSF handshake
+static void sendDeviceInfo()
+{
+    // Device Info frame (0x29) — extended header format
+    const char deviceName[] = "CRSFDude";
+    uint8_t nameLen = sizeof(deviceName); // includes null terminator
+    uint8_t buf[48];
+    uint8_t i = 0;
+    buf[i++] = 0xC8;                    // sync
+    // length filled later
+    uint8_t lenIdx = i++;
+    buf[i++] = 0x29;                    // type: Device Info
+    buf[i++] = 0xEA;                    // dest: radio
+    buf[i++] = 0xEE;                    // origin: external module
+    memcpy(&buf[i], deviceName, nameLen);
+    i += nameLen;
+    // Serial number (4 bytes)
+    buf[i++] = 0; buf[i++] = 0; buf[i++] = 0; buf[i++] = 1;
+    // Hardware ID (4 bytes)
+    buf[i++] = 0; buf[i++] = 0; buf[i++] = 0; buf[i++] = 1;
+    // Firmware ID (4 bytes)
+    buf[i++] = 0; buf[i++] = 0; buf[i++] = 0; buf[i++] = 1;
+    // Parameter count + protocol version
+    buf[i++] = 0;   // parameter count
+    buf[i++] = 0;   // protocol version
+    buf[lenIdx] = i - 1; // length: everything after sync+len, including CRC
+    buf[i] = crc8_calc(&buf[2], i - 2);
+    i++;
+    crsfSend(buf, i);
+}
+
 static void sendFlightMode()
 {
     static uint32_t lastToggleTime = 0;
@@ -172,7 +203,9 @@ static void handleInput()
 
         if (crc8_calc(&inBuffer[2], totalLen - 3) == inBuffer[totalLen - 1])
         {
-            if (inBuffer[2] == CRSF_RC_CHANNELS && totalLen >= 26)
+            uint8_t frameType = inBuffer[2];
+
+            if (frameType == CRSF_RC_CHANNELS && totalLen >= 26)
             {
                 pktCount++;
                 decodeChannels(&inBuffer[3]);
@@ -181,6 +214,11 @@ static void handleInput()
                     sendFlightMode();
                     return;
                 }
+            }
+            else if (frameType == 0x28) // Device Ping
+            {
+                sendDeviceInfo();
+                return;
             }
         }
 
