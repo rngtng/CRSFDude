@@ -46,29 +46,19 @@ public:
     // Callback: called when Device Ping received (default: auto-responds with device info)
     void (*onDevicePing)() = nullptr;
 
-    // CRC utility
-    static uint8_t crc8(const uint8_t *data, uint16_t length);
-
 private:
-    static void crc8_init();
     static uint8_t crc8_table[256];
-    static bool crc8_initialized;
+    static uint8_t crc8(const uint8_t *data, uint16_t length);
 
     // Half-duplex GPIO matrix switching
     uint8_t _pin = 0;
-    static void IRAM_ATTR halfDuplexEnableRX(uint8_t pin);
-    static void IRAM_ATTR halfDuplexEnableTX(uint8_t pin);
-
-    // TX done task
-    static TaskHandle_t _txDoneTaskHandle;
-    static uint8_t _txDonePin;
-    static void txDoneTask(void *param);
+    static void halfDuplexEnableRX(uint8_t pin);
+    static void halfDuplexEnableTX(uint8_t pin);
 
     // Parser state
     uint8_t _parseBuffer[CRSF_MAX_PACKET_LEN];
     uint8_t _parseBufferLen = 0;
     uint16_t _channels[16] = {};
-    const char *_deviceName = "CRSFDevice";
 
     void alignBufferToSync();
     void processFrame(uint8_t frameType, uint8_t totalLength);

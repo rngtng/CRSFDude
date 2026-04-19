@@ -3,21 +3,6 @@
 
 // Static members
 uint8_t CRSFProtocol::crc8_table[256];
-bool CRSFProtocol::crc8_initialized = false;
-TaskHandle_t CRSFProtocol::_txDoneTaskHandle = nullptr;
-uint8_t CRSFProtocol::_txDonePin = 0;
-
-// CRC8 with polynomial 0xD5
-void CRSFProtocol::crc8_init()
-{
-    for (uint16_t i = 0; i < 256; i++) {
-        uint8_t crc = i;
-        for (uint8_t j = 0; j < 8; j++)
-            crc = (crc << 1) ^ ((crc & 0x80) ? CRSF_CRC_POLY : 0);
-        crc8_table[i] = crc;
-    }
-    crc8_initialized = true;
-}
 
 uint8_t CRSFProtocol::crc8(const uint8_t *data, uint16_t length)
 {
@@ -28,42 +13,33 @@ uint8_t CRSFProtocol::crc8(const uint8_t *data, uint16_t length)
 }
 
 // Half-duplex: inverted single-wire via GPIO matrix (mLRS pattern)
-void IRAM_ATTR CRSFProtocol::halfDuplexEnableRX(uint8_t pin)
+void CRSFProtocol::halfDuplexEnableRX(uint8_t pin)
 {
     gpio_set_pull_mode((gpio_num_t)pin, GPIO_PULLDOWN_ONLY);
     gpio_set_direction((gpio_num_t)pin, GPIO_MODE_INPUT);
     gpio_matrix_in((gpio_num_t)pin, U1RXD_IN_IDX, true);
 }
 
-void IRAM_ATTR CRSFProtocol::halfDuplexEnableTX(uint8_t pin)
+void CRSFProtocol::halfDuplexEnableTX(uint8_t pin)
 {
     uart_set_pin(UART_NUM_1, pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     gpio_matrix_out((gpio_num_t)pin, U1TXD_OUT_IDX, true, false);
 }
 
-// FreeRTOS task: wait for TX complete, then restore RX
-void CRSFProtocol::txDoneTask(void *param)
-{
-    while (true) {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        uart_wait_tx_done(UART_NUM_1, pdMS_TO_TICKS(20));
-        gpio_reset_pin((gpio_num_t)_txDonePin);
-        halfDuplexEnableRX(_txDonePin);
-        uart_ll_rxfifo_rst(UART_LL_GET_HW(1));
-    }
-}
-
 void CRSFProtocol::begin(uint8_t pin, uint32_t baudRate)
 {
     _pin = pin;
-    _txDonePin = pin;
 
-    if (!crc8_initialized) crc8_init();
+    // Init CRC8 lookup table
+    for (uint16_t i = 0; i < 256; i++) {
+        uint8_t crc = i;
+        for (uint8_t j = 0; j < 8; j++)
+            crc = (crc << 1) ^ ((crc & 0x80) ? CRSF_CRC_POLY : 0);
+        crc8_table[i] = crc;
+    }
 
     _serial.begin(baudRate, SERIAL_8N1, pin, pin);
     _serial.setTimeout(0);
-
-    xTaskCreatePinnedToCore(txDoneTask, "CRSFTxDone", 2048, NULL, 5, &_txDoneTaskHandle, 0);
     halfDuplexEnableRX(pin);
 }
 
@@ -136,7 +112,7 @@ void CRSFProtocol::processFrame(uint8_t frameType, uint8_t totalLength)
         if (onDevicePing) {
             onDevicePing();
         } else {
-            sendDeviceInfo(_deviceName);
+            sendDeviceInfo("CRSFDude");
         }
     }
 }
@@ -150,14 +126,16 @@ void CRSFProtocol::sendFrame(const uint8_t *frame, uint8_t length)
 {
     halfDuplexEnableTX(_pin);
     uart_write_bytes(UART_NUM_1, (const char *)frame, length);
-    xTaskNotifyGive(_txDoneTaskHandle);
+    uart_wait_tx_done(UART_NUM_1, pdMS_TO_TICKS(20));
+    gpio_reset_pin((gpio_num_t)_pin);
+    halfDuplexEnableRX(_pin);
+    uart_ll_rxfifo_rst(UART_LL_GET_HW(1));
     _parseBufferLen = 0;
     txPacketCount++;
 }
 
 void CRSFProtocol::sendDeviceInfo(const char *deviceName)
 {
-    _deviceName = deviceName;
     uint8_t nameLength = strlen(deviceName) + 1;
     uint8_t frame[48];
     uint8_t pos = 0;

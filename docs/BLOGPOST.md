@@ -55,7 +55,7 @@ gpio_matrix_in(pin, U1RXD_IN_IDX, true);
 
 Heads up: on ESP32-C3, `gpio_set_direction(INPUT)` alone does NOT release the TX output. You need `gpio_reset_pin()` to fully detach. Wasted hours on this. The original ESP32 behaves differently here.
 
-The TX-to-RX switch runs in a FreeRTOS task that waits for `uart_wait_tx_done()` before switching back — keeps the main parsing loop non-blocking.
+After sending, `uart_wait_tx_done()` blocks until the last byte is clocked out (~167μs for a 7-byte frame), then `gpio_reset_pin()` fully releases the TX output before re-enabling RX.
 
 ## The Radio Froze. Like, permanently.
 
@@ -112,7 +112,7 @@ void loop() {
 
 1. **JR bay CRSF is inverted** — hardware inverter on the radio. Wire idles LOW.
 2. **ESP32-C3 half-duplex = GPIO matrix juggling** — no native support. Route TX/RX dynamically. `gpio_reset_pin()` is your friend on C3.
-3. **Don't block during TX** — FreeRTOS task for `uart_wait_tx_done()` + RX restore.
+3. **`gpio_reset_pin()` after TX** — on ESP32-C3, the only reliable way to release the UART TX output from the pin.
 4. **EdgeTX Device Ping handshake is mandatory** — respond to 0x28 with 0x29 or the radio freezes. Not documented anywhere except the source.
 5. **Auto-detect baud rate** early — scan rates, check CRC. Saved me when I wasn't sure if the radio was at 115200 or 420000.
 
