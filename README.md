@@ -1,4 +1,4 @@
-# test_crsf
+# CRSFDude
 
 CRSF packet counter and test firmware for ESP32-C3.
 
