@@ -12,7 +12,7 @@
 
 // Pin Config
 #define CRSF_RX_PIN 20
-#define CRSF_TX_PIN 21
+#define CRSF_TX_PIN 20
 
 // CRC
 static uint8_t crc8tab[256];
@@ -55,35 +55,71 @@ static void decodeChannels(const uint8_t *p)
     channels[3] = ((uint16_t)p[4] >> 1 | (uint16_t)p[5] << 7) & 0x07FF;
 }
 
-// --- NEW: CRSF TELEMETRY INJECTION ---
-static void replyWithTelemetry() 
+static uint32_t txCount = 0;
+
+// --- CRSF Telemetry TX ---
+static void crsfSend(const uint8_t *buf, uint8_t len)
+{
+    // Brief pause to let radio finish its TX and switch to RX
+    delayMicroseconds(500);
+
+    uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV);
+    size_t written = CrsfSerial.write(buf, len);
+    CrsfSerial.flush();
+    uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV);
+    if (written > 0) txCount++;
+}
+
+static void sendBatteryTelemetry()
+{
+    // CRSF Battery Sensor frame (0x08)
+    // Payload: voltage(2) current(2) capacity(3) remaining(1) = 8 bytes
+    uint8_t buffer[12];
+    buffer[0]  = 0xC8;          // Sync
+    buffer[1]  = 10;            // Length: type(1) + payload(8) + crc(1)
+    buffer[2]  = 0x08;          // Type: Battery
+    buffer[3]  = 0x00;          // Voltage high (11.1V = 111 in 0.1V units)
+    buffer[4]  = 111;           // Voltage low
+    buffer[5]  = 0x00;          // Current high (1.5A = 15 in 0.1A units)
+    buffer[6]  = 15;            // Current low
+    buffer[7]  = 0x00;          // Used capacity byte 2
+    buffer[8]  = 0x00;          // Used capacity byte 1
+    buffer[9]  = 100;           // Used capacity byte 0 (100 mAh)
+    buffer[10] = 75;            // Remaining %
+    buffer[11] = crc8_calc(&buffer[2], 9);
+
+    crsfSend(buffer, 12);
+}
+
+static void sendFlightMode()
 {
     static uint32_t lastToggleTime = 0;
     static bool isSignalOn = false;
-    
+
     uint32_t now = millis();
-    // Toggle between ON/OFF every 2 seconds
     if (now - lastToggleTime >= 2000) {
         isSignalOn = !isSignalOn;
         lastToggleTime = now;
     }
 
-    const char* modeString = isSignalOn ? "ON" : "OFF";
-    uint8_t strLen = strlen(modeString) + 1; // Includes null terminator
-    uint8_t frameLen = 1 + strLen + 1;       // Type + String + CRC
-    
+    const char* mode = isSignalOn ? "ON" : "OFF";
+    uint8_t strLen = strlen(mode) + 1;
+    uint8_t frameLen = 1 + strLen + 1;
+
     uint8_t buffer[32];
-    buffer[0] = 0xEA;           // Sync: Send to Handset (EdgeTX/OpenTX)
-    buffer[1] = frameLen;       // Length
-    buffer[2] = 0x21;           // Type: Flight Mode (0x21)
-    
-    memcpy(&buffer[3], modeString, strLen);
-    
-    // Reuse existing CRC lookup table over Type and Payload
+    buffer[0] = 0xC8;
+    buffer[1] = frameLen;
+    buffer[2] = 0x21;           // Type: Flight Mode
+    memcpy(&buffer[3], mode, strLen);
     buffer[3 + strLen] = crc8_calc(&buffer[2], strLen + 1);
-    
-    // Write out to the radio
-    CrsfSerial.write(buffer, 3 + strLen + 1);
+
+    crsfSend(buffer, 3 + strLen + 1);
+}
+
+static void replyWithTelemetry()
+{
+    sendBatteryTelemetry();
+    sendFlightMode();
 }
 // -------------------------------------
 
@@ -138,7 +174,7 @@ static void handleInput()
             {
                 pktCount++;
                 decodeChannels(&inBuffer[3]);
-                
+
                 // NEW: Fire telemetry immediately after successfully decoding RC channels
                 replyWithTelemetry();
             }
@@ -160,9 +196,6 @@ void setup()
 
     crc8_init();
     CrsfSerial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_RX_PIN, CRSF_TX_PIN);
-    
-    // NEW: Ensure Half-Duplex mode is explicitly enabled for single-wire shared TX/RX
-    CrsfSerial.setHalfDuplex(true); 
 
     CrsfSerial.setTimeout(0);
     uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV);
@@ -177,9 +210,9 @@ void loop()
     uint32_t now = millis();
     if (now - lastReportTime >= 1000)
     {
-        Serial.printf("CH1: %4u  CH2: %4u  CH3: %4u  CH4: %4u  [%u pkt/s]\n",
-                      channels[0], channels[1], channels[2], channels[3], pktCount);
-        pktCount = 0;
+        Serial.printf("CH1: %4u  CH2: %4u  CH3: %4u  CH4: %4u  [rx:%u tx:%u /s]\n",
+                      channels[0], channels[1], channels[2], channels[3], pktCount, txCount);
+        pktCount = txCount = 0;
         lastReportTime = now;
     }
 }
