@@ -57,16 +57,25 @@ static void decodeChannels(const uint8_t *p)
 
 static uint32_t txCount = 0;
 
-// --- CRSF Telemetry TX ---
+// Half-duplex: use separate TX pin, keep RX working via uart_set_line_inverse
+// TX pin directly wired to same CRSF line as RX pin
+#define CRSF_TX_OUT_PIN 21  // Use a separate GPIO for TX output
+
 static void crsfSend(const uint8_t *buf, uint8_t len)
 {
-    // Brief pause to let radio finish its TX and switch to RX
-    delayMicroseconds(500);
-
+    // Temporarily enable TX inversion, send, then restore RX-only
+    // Re-apply full config each time to avoid state corruption
     uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV);
+
     size_t written = CrsfSerial.write(buf, len);
     CrsfSerial.flush();
+    delayMicroseconds(200); // ensure last byte fully clocked out
+
     uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV);
+
+    // Flush garbage from RX buffer caused by seeing our own TX
+    while (CrsfSerial.available()) CrsfSerial.read();
+
     if (written > 0) txCount++;
 }
 
@@ -175,8 +184,8 @@ static void handleInput()
                 pktCount++;
                 decodeChannels(&inBuffer[3]);
 
-                // NEW: Fire telemetry immediately after successfully decoding RC channels
-                replyWithTelemetry();
+                // Telemetry disabled for debugging
+                // replyWithTelemetry();
             }
         }
 
@@ -195,9 +204,9 @@ void setup()
     Serial.println("CRSFDude starting...");
 
     crc8_init();
-    CrsfSerial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_RX_PIN, CRSF_TX_PIN);
-
+    CrsfSerial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_RX_PIN, CRSF_RX_PIN);
     CrsfSerial.setTimeout(0);
+    // Only invert RX at startup — TX inversion toggled per-send
     uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV);
 
     lastReportTime = millis();
