@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include "driver/uart.h"
 #include "driver/gpio.h"
-#include "soc/uart_struct.h"
+#include "hal/uart_ll.h"
 
 // CRSF Protocol
 #define CRSF_SYNC_BYTE        0xC8
@@ -45,24 +45,41 @@ static inline bool isSyncByte(uint8_t b)
     return b == CRSF_SYNC_BYTE || b == CRSF_SYNC_BYTE_TX;
 }
 
-// GPIO matrix half-duplex — modeled after mLRS JR Pin5 implementation
-// ALL inversion at GPIO matrix level, none at UART
-static void IRAM_ATTR duplex_set_RX()
+// Half-duplex GPIO matrix switching — exact mLRS pattern
+static void IRAM_ATTR pin5_rx_enable()
 {
+    gpio_set_pull_mode((gpio_num_t)CRSF_PIN, GPIO_PULLDOWN_ONLY);
     gpio_set_direction((gpio_num_t)CRSF_PIN, GPIO_MODE_INPUT);
-    gpio_set_pull_mode((gpio_num_t)CRSF_PIN, GPIO_PULLDOWN_ONLY); // permanent pulldown per mLRS
-    gpio_matrix_in((gpio_num_t)CRSF_PIN, U1RXD_IN_IDX, true);    // inverted at matrix
-    // Hardware FIFO reset to discard ghost bytes from TX→RX switch
-    UART1.conf0.rxfifo_rst = 1;
-    UART1.conf0.rxfifo_rst = 0;
+    gpio_matrix_in((gpio_num_t)CRSF_PIN, U1RXD_IN_IDX, true);
 }
 
-static void IRAM_ATTR duplex_set_TX()
+static void IRAM_ATTR pin5_tx_enable()
 {
-    gpio_matrix_in(MATRIX_DETACH_IN_LOW, U1RXD_IN_IDX, false);   // disconnect RX first
-    gpio_set_level((gpio_num_t)CRSF_PIN, 0);                      // inverted idle
-    gpio_set_direction((gpio_num_t)CRSF_PIN, GPIO_MODE_OUTPUT);
-    gpio_matrix_out((gpio_num_t)CRSF_PIN, U1TXD_OUT_IDX, true, false); // inverted at matrix
+    // Remap: TX to pin 20, RX disconnected
+    uart_set_pin(UART_NUM_1, CRSF_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    // Re-apply TX inversion at GPIO matrix
+    gpio_matrix_out((gpio_num_t)CRSF_PIN, U1TXD_OUT_IDX, true, false);
+}
+
+// TX done task on Core 0 — mLRS pattern: wait for TX complete, then switch to RX
+static TaskHandle_t txDoneTaskHandle = nullptr;
+
+static void txDoneTask(void *param)
+{
+    while (true)
+    {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        uart_wait_tx_done(UART_NUM_1, pdMS_TO_TICKS(20));
+
+        // Fully reset pin 20: detach from all peripherals, return to GPIO
+        gpio_reset_pin((gpio_num_t)CRSF_PIN);
+        // Now configure as RX input
+        gpio_set_direction((gpio_num_t)CRSF_PIN, GPIO_MODE_INPUT);
+        gpio_set_pull_mode((gpio_num_t)CRSF_PIN, GPIO_PULLDOWN_ONLY);
+        gpio_matrix_in((gpio_num_t)CRSF_PIN, U1RXD_IN_IDX, true);
+        // Reset RX FIFO
+        uart_ll_rxfifo_rst(UART_LL_GET_HW(1));
+    }
 }
 
 // RC Channels (packed 11-bit)
@@ -85,10 +102,10 @@ static uint32_t lastReportTime = 0;
 
 static void crsfSend(const uint8_t *buf, uint8_t len)
 {
-    duplex_set_TX();
+    pin5_tx_enable();
     uart_write_bytes(UART_NUM_1, (const char *)buf, len);
-    uart_wait_tx_done(UART_NUM_1, pdMS_TO_TICKS(50));
-    duplex_set_RX();  // switches to input + FIFO reset
+    // Notify the TX done task (runs on Core 0) to handle completion + RX restore
+    xTaskNotifyGive(txDoneTaskHandle);
     bufferPtr = 0;
     txCount++;
 }
@@ -184,9 +201,12 @@ void setup()
     crc8_init();
     CrsfSerial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_PIN, CRSF_PIN);
     CrsfSerial.setTimeout(0);
-    // NO uart_set_line_inverse — all inversion via GPIO matrix
-    duplex_set_RX();
 
+    // Start TX done task on Core 0 (main loop runs on Core 1)
+    xTaskCreatePinnedToCore(txDoneTask, "TxDone", 2048, NULL, 5,
+                            &txDoneTaskHandle, 0);
+
+    pin5_rx_enable();
     lastReportTime = millis();
 }
 
