@@ -51,7 +51,7 @@ static uint8_t crc8_calc(const uint8_t *data, uint16_t len)
 }
 
 // --- UART ---
-static const uint32_t baudRates[] = { 115200, 420000, 400000, 921600 };
+static const uint32_t baudRates[] = { 420000, 400000, 115200, 921600 };
 static const int numBaudRates = sizeof(baudRates) / sizeof(baudRates[0]);
 
 HardwareSerial CrsfSerial(1);
@@ -125,9 +125,9 @@ static uint32_t detectBaudRate()
         }
     }
 
-    Serial.println("No CRSF detected, defaulting to 115200 inverted");
+    Serial.println("No CRSF detected, defaulting to 420000 inverted");
     detectedInverted = true;
-    return 115200;
+    return 420000;
 }
 
 // --- RC Channel decoding (packed 11-bit channels) ---
@@ -180,14 +180,9 @@ static const char* frameTypeName(uint8_t type)
 static uint8_t inBuffer[CRSF_MAX_PACKET_LEN];
 static uint8_t bufferPtr = 0;
 static uint32_t goodPktCount = 0;
-static uint32_t badPktCount = 0;
-static uint32_t badSyncCount = 0;
 static uint32_t badLenCount = 0;
 static uint32_t badCrcCount = 0;
 static uint32_t lastReportTime = 0;
-static uint8_t lastBadFrame[CRSF_MAX_PACKET_LEN];
-static uint8_t lastBadLen = 0;
-static bool badFrameCaptured = false;
 static uint32_t frameTypeCounts[256] = {};
 
 static void alignBufferToSync()
@@ -227,10 +222,9 @@ static void handleInput()
 
     while (bufferPtr >= CRSF_MIN_PACKET_LEN)
     {
+        // Skip inter-frame bytes (normal on half-duplex)
         if (!isSyncByte(inBuffer[0]))
         {
-            badPktCount++;
-            badSyncCount++;
             alignBufferToSync();
             continue;
         }
@@ -241,14 +235,7 @@ static void handleInput()
 
         if (totalLen < CRSF_MIN_PACKET_LEN || totalLen > CRSF_MAX_PACKET_LEN)
         {
-            badPktCount++;
             badLenCount++;
-            if (!badFrameCaptured)
-            {
-                memcpy(lastBadFrame, inBuffer, min((int)bufferPtr, (int)CRSF_MAX_PACKET_LEN));
-                lastBadLen = min(bufferPtr, (uint8_t)16);
-                badFrameCaptured = true;
-            }
             alignBufferToSync();
             continue;
         }
@@ -262,14 +249,7 @@ static void handleInput()
         }
         else
         {
-            badPktCount++;
             badCrcCount++;
-            if (!badFrameCaptured)
-            {
-                memcpy(lastBadFrame, inBuffer, totalLen);
-                lastBadLen = totalLen;
-                badFrameCaptured = true;
-            }
         }
 
         uint8_t remaining = bufferPtr - totalLen;
@@ -306,25 +286,15 @@ void loop()
     if (now - lastReportTime >= 1000)
     {
         uint32_t good = goodPktCount;
-        uint32_t bad = badPktCount;
-        uint32_t bSync = badSyncCount;
         uint32_t bLen = badLenCount;
         uint32_t bCrc = badCrcCount;
-        goodPktCount = badPktCount = badSyncCount = badLenCount = badCrcCount = 0;
+        goodPktCount = badLenCount = badCrcCount = 0;
 
         // Summary line
-        Serial.printf("\n--- %u ok, %u bad (sync:%u len:%u crc:%u) /sec ---\n",
-                      good, bad, bSync, bLen, bCrc);
-
-        // Show one captured bad frame
-        if (badFrameCaptured)
-        {
-            Serial.print("  bad frame: ");
-            for (int j = 0; j < lastBadLen; j++)
-                Serial.printf("%02X ", lastBadFrame[j]);
-            Serial.println();
-            badFrameCaptured = false;
-        }
+        Serial.printf("\n--- %u pkt/sec", good);
+        if (bLen || bCrc)
+            Serial.printf(" (err: %u len, %u crc)", bLen, bCrc);
+        Serial.println(" ---");
 
         // Frame type breakdown
         for (int t = 0; t < 256; t++)
