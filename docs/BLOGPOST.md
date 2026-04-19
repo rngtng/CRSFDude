@@ -114,7 +114,9 @@ void loop() {
 2. **ESP32-C3 half-duplex = GPIO matrix juggling** — no native support. Route TX/RX dynamically. `gpio_reset_pin()` is your friend on C3.
 3. **`gpio_reset_pin()` after TX** — on ESP32-C3, the only reliable way to release the UART TX output from the pin.
 4. **EdgeTX Device Ping handshake is mandatory** — respond to 0x28 with 0x29 or the radio freezes. Not documented anywhere except the source.
-5. **Auto-detect baud rate** early — scan rates, check CRC. Saved me when I wasn't sure if the radio was at 115200 or 420000.
+5. **Link Stats enables telemetry streaming** — EdgeTX silently drops ALL sensor data (except flight mode) unless it has received Link Statistics (0x14) with non-zero RxQuality. Another undocumented gotcha.
+6. **Auto-detect baud rate** early — scan rates, check CRC. Saved me when I wasn't sure if the radio was at 115200 or 420000.
+7. **One telemetry frame per response window** — sending multiple frames back-to-back causes collisions with the radio's next TX. Rotate sensor types across cycles instead.
 
 ## Resources & shout-outs
 

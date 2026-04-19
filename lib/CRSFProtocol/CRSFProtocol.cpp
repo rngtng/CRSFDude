@@ -134,6 +134,15 @@ void CRSFProtocol::sendFrame(const uint8_t *frame, uint8_t length)
     txPacketCount++;
 }
 
+// Helper: write sync + length + type, return position after type
+uint8_t CRSFProtocol::buildFrameHeader(uint8_t *frame, uint8_t type, uint8_t payloadLength)
+{
+    frame[0] = CRSF_SYNC_BYTE;
+    frame[1] = payloadLength + 2; // type + payload + crc
+    frame[2] = type;
+    return 3;
+}
+
 void CRSFProtocol::sendDeviceInfo(const char *deviceName)
 {
     uint8_t nameLength = strlen(deviceName) + 1;
@@ -158,12 +167,109 @@ void CRSFProtocol::sendFlightMode(const char *mode)
 {
     uint8_t stringLength = strlen(mode) + 1;
     uint8_t frame[32];
-    uint8_t pos = 0;
-
-    frame[pos++] = CRSF_SYNC_BYTE;
-    frame[pos++] = 1 + stringLength + 1;
-    frame[pos++] = CRSF_FRAMETYPE_FLIGHT_MODE;
+    uint8_t pos = buildFrameHeader(frame, CRSF_FRAMETYPE_FLIGHT_MODE, stringLength);
     memcpy(&frame[pos], mode, stringLength); pos += stringLength;
+    frame[pos] = crc8(&frame[2], pos - 2); pos++;
+    sendFrame(frame, pos);
+}
+
+void CRSFProtocol::sendBattery(uint16_t voltage, uint16_t current, uint32_t capacity, uint8_t remaining)
+{
+    // Payload: voltage(2) + current(2) + capacity(3) + remaining(1) = 8 bytes
+    uint8_t frame[12];
+    uint8_t pos = buildFrameHeader(frame, CRSF_FRAMETYPE_BATTERY, 8);
+    frame[pos++] = voltage >> 8;
+    frame[pos++] = voltage & 0xFF;
+    frame[pos++] = current >> 8;
+    frame[pos++] = current & 0xFF;
+    frame[pos++] = (capacity >> 16) & 0xFF;
+    frame[pos++] = (capacity >> 8) & 0xFF;
+    frame[pos++] = capacity & 0xFF;
+    frame[pos++] = remaining;
+    frame[pos] = crc8(&frame[2], pos - 2); pos++;
+    sendFrame(frame, pos);
+}
+
+void CRSFProtocol::sendGPS(int32_t latitude, int32_t longitude, uint16_t groundspeed,
+                            uint16_t heading, uint16_t altitude, uint8_t satellites)
+{
+    // Payload: lat(4) + lon(4) + speed(2) + heading(2) + alt(2) + sats(1) = 15 bytes
+    uint8_t frame[19];
+    uint8_t pos = buildFrameHeader(frame, CRSF_FRAMETYPE_GPS, 15);
+    frame[pos++] = (latitude >> 24) & 0xFF;
+    frame[pos++] = (latitude >> 16) & 0xFF;
+    frame[pos++] = (latitude >> 8) & 0xFF;
+    frame[pos++] = latitude & 0xFF;
+    frame[pos++] = (longitude >> 24) & 0xFF;
+    frame[pos++] = (longitude >> 16) & 0xFF;
+    frame[pos++] = (longitude >> 8) & 0xFF;
+    frame[pos++] = longitude & 0xFF;
+    frame[pos++] = groundspeed >> 8;
+    frame[pos++] = groundspeed & 0xFF;
+    frame[pos++] = heading >> 8;
+    frame[pos++] = heading & 0xFF;
+    frame[pos++] = (altitude + 1000) >> 8;   // offset by +1000m per CRSF spec
+    frame[pos++] = (altitude + 1000) & 0xFF;
+    frame[pos++] = satellites;
+    frame[pos] = crc8(&frame[2], pos - 2); pos++;
+    sendFrame(frame, pos);
+}
+
+void CRSFProtocol::sendAttitude(int16_t pitch, int16_t roll, int16_t yaw)
+{
+    // Payload: pitch(2) + roll(2) + yaw(2) = 6 bytes
+    uint8_t frame[10];
+    uint8_t pos = buildFrameHeader(frame, CRSF_FRAMETYPE_ATTITUDE, 6);
+    frame[pos++] = pitch >> 8;
+    frame[pos++] = pitch & 0xFF;
+    frame[pos++] = roll >> 8;
+    frame[pos++] = roll & 0xFF;
+    frame[pos++] = yaw >> 8;
+    frame[pos++] = yaw & 0xFF;
+    frame[pos] = crc8(&frame[2], pos - 2); pos++;
+    sendFrame(frame, pos);
+}
+
+void CRSFProtocol::sendBaroAltitude(int32_t altitudeCm)
+{
+    // Payload: altitude(2) = 2 bytes. Value in decimeters + 10000dm offset
+    uint8_t frame[6];
+    int16_t altDm = (altitudeCm / 10) + 10000;
+    uint8_t pos = buildFrameHeader(frame, CRSF_FRAMETYPE_BARO_ALT, 2);
+    frame[pos++] = altDm >> 8;
+    frame[pos++] = altDm & 0xFF;
+    frame[pos] = crc8(&frame[2], pos - 2); pos++;
+    sendFrame(frame, pos);
+}
+
+void CRSFProtocol::sendVario(int16_t verticalSpeed)
+{
+    // Payload: vspeed(2) = 2 bytes, in cm/s
+    uint8_t frame[6];
+    uint8_t pos = buildFrameHeader(frame, CRSF_FRAMETYPE_VARIO, 2);
+    frame[pos++] = verticalSpeed >> 8;
+    frame[pos++] = verticalSpeed & 0xFF;
+    frame[pos] = crc8(&frame[2], pos - 2); pos++;
+    sendFrame(frame, pos);
+}
+
+void CRSFProtocol::sendLinkStats(uint8_t rxRssi1, uint8_t rxRssi2, uint8_t rxQuality, int8_t rxSnr,
+                                  uint8_t antenna, uint8_t rfMode, uint8_t txPower,
+                                  uint8_t txRssi, uint8_t txQuality, int8_t txSnr)
+{
+    // Payload: 10 bytes, one per field. rxQuality MUST be non-zero to enable telemetry streaming.
+    uint8_t frame[14];
+    uint8_t pos = buildFrameHeader(frame, CRSF_FRAMETYPE_LINK_STATS, 10);
+    frame[pos++] = rxRssi1;
+    frame[pos++] = rxRssi2;
+    frame[pos++] = rxQuality;
+    frame[pos++] = rxSnr;
+    frame[pos++] = antenna;
+    frame[pos++] = rfMode;
+    frame[pos++] = txPower;
+    frame[pos++] = txRssi;
+    frame[pos++] = txQuality;
+    frame[pos++] = txSnr;
     frame[pos] = crc8(&frame[2], pos - 2); pos++;
     sendFrame(frame, pos);
 }

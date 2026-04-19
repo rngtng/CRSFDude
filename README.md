@@ -50,6 +50,7 @@ void setup() {
 void loop() {
     if (crsf.update()) {
         uint16_t ch1 = crsf.getChannel(0);  // 0-2047
+        crsf.sendLinkStats(90, 90, 100, 10, 0, 4, 3, 80, 100, 8);
         crsf.sendFlightMode("ACRO");
     }
 }
@@ -61,9 +62,15 @@ void loop() {
 |--------|-------------|
 | `begin(pin, baud)` | Initialize half-duplex UART |
 | `update()` | Parse incoming frames, returns `true` on new RC data |
-| `getChannel(ch)` | Read channel value (0-15, 11-bit) |
-| `sendFlightMode(str)` | Send flight mode telemetry |
-| `sendDeviceInfo(name)` | Send device info (auto-called on Device Ping) |
+| `getChannel(ch)` | Read channel value (0-15, 11-bit, 0-2047) |
+| `sendLinkStats(...)` | Link statistics — **must send to enable other sensors** |
+| `sendFlightMode(mode)` | Flight mode string (shows in EdgeTX top bar) |
+| `sendBattery(V, A, mAh, %)` | Battery voltage (0.1V), current (0.1A), capacity, remaining |
+| `sendGPS(lat, lon, spd, hdg, alt, sats)` | GPS: degrees*1e7, cm/s, deg*100, meters, count |
+| `sendAttitude(pitch, roll, yaw)` | Attitude in radians*10000 |
+| `sendBaroAltitude(cm)` | Barometric altitude in centimeters |
+| `sendVario(cm/s)` | Vertical speed in cm/s |
+| `sendDeviceInfo(name)` | Device info (auto-called on Device Ping) |
 | `sendFrame(buf, len)` | Send raw CRSF frame |
 
 ## Key Learnings
@@ -72,3 +79,4 @@ void loop() {
 2. **GPIO matrix** handles inversion and half-duplex pin switching on ESP32-C3 (no `uart_set_line_inverse`)
 3. **`gpio_reset_pin()` required** on ESP32-C3 to fully release the TX output after sending
 4. **EdgeTX handshake** is mandatory — radio sends Device Ping (0x28) after detecting telemetry; must respond with Device Info (0x29) or radio freezes permanently
+5. **Link stats required for sensor discovery** — EdgeTX silently drops all telemetry (except flight mode) unless Link Statistics (0x14) with non-zero RxQuality has been received
