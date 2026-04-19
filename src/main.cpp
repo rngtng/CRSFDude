@@ -7,6 +7,7 @@
 #define CRSF_MAX_PACKET_LEN   64
 #define CRSF_MIN_PACKET_LEN   4
 #define CRSF_CRC_POLY         0xD5
+#define CRSF_BAUD             420000
 
 // CRSF frame types
 #define CRSF_FRAMETYPE_GPS                0x02
@@ -51,83 +52,11 @@ static uint8_t crc8_calc(const uint8_t *data, uint16_t len)
 }
 
 // --- UART ---
-static const uint32_t baudRates[] = { 420000, 400000, 115200, 921600 };
-static const int numBaudRates = sizeof(baudRates) / sizeof(baudRates[0]);
-
 HardwareSerial CrsfSerial(1);
 
 static inline bool isSyncByte(uint8_t b)
 {
     return b == CRSF_SYNC_BYTE || b == CRSF_SYNC_BYTE_TX;
-}
-
-static void setRxInversion(bool inverted)
-{
-    if (inverted)
-        uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV);
-    else
-        uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_INV_DISABLE);
-}
-
-static int countValidFrames(const uint8_t *buf, int len)
-{
-    int count = 0, pos = 0;
-    while (pos < len - 3)
-    {
-        if (!isSyncByte(buf[pos])) { pos++; continue; }
-        uint8_t totalLen = buf[pos + 1] + 2;
-        if (totalLen < CRSF_MIN_PACKET_LEN || totalLen > CRSF_MAX_PACKET_LEN) { pos++; continue; }
-        if (pos + totalLen > len) break;
-        if (crc8_calc(&buf[pos + 2], totalLen - 3) == buf[pos + totalLen - 1])
-            count++;
-        pos += totalLen;
-    }
-    return count;
-}
-
-static bool detectedInverted = false;
-
-static uint32_t detectBaudRate()
-{
-    Serial.println("Auto-detecting CRSF...");
-
-    for (int inv = 0; inv <= 1; inv++)
-    {
-        bool inverted = (inv == 1);
-        for (int i = 0; i < numBaudRates; i++)
-        {
-            CrsfSerial.end();
-            delay(50);
-            CrsfSerial.begin(baudRates[i], SERIAL_8N1, CRSF_RX_PIN, CRSF_TX_PIN);
-            CrsfSerial.setTimeout(0);
-            setRxInversion(inverted);
-            delay(100);
-            while (CrsfSerial.available()) CrsfSerial.read();
-            delay(50);
-
-            uint8_t buf[128];
-            int got = 0;
-            uint32_t t0 = millis();
-            while (got < 128 && millis() - t0 < 500)
-            {
-                if (CrsfSerial.available())
-                    buf[got++] = CrsfSerial.read();
-            }
-
-            int valid = countValidFrames(buf, got);
-            if (valid >= 3)
-            {
-                Serial.printf("Detected: %u baud, %s, %d frames\n",
-                              baudRates[i], inverted ? "inverted" : "normal", valid);
-                detectedInverted = inverted;
-                return baudRates[i];
-            }
-        }
-    }
-
-    Serial.println("No CRSF detected, defaulting to 420000 inverted");
-    detectedInverted = true;
-    return 420000;
 }
 
 // --- RC Channel decoding (packed 11-bit channels) ---
@@ -153,7 +82,6 @@ static void decodeChannels(const uint8_t *payload)
     channels[15] = ((uint16_t)payload[20] >> 5 | (uint16_t)payload[21] << 3) & 0x07FF;
 }
 
-// --- Frame type name ---
 static const char* frameTypeName(uint8_t type)
 {
     switch (type)
@@ -180,8 +108,7 @@ static const char* frameTypeName(uint8_t type)
 static uint8_t inBuffer[CRSF_MAX_PACKET_LEN];
 static uint8_t bufferPtr = 0;
 static uint32_t goodPktCount = 0;
-static uint32_t badLenCount = 0;
-static uint32_t badCrcCount = 0;
+static uint32_t badPktCount = 0;
 static uint32_t lastReportTime = 0;
 static uint32_t frameTypeCounts[256] = {};
 
@@ -222,7 +149,6 @@ static void handleInput()
 
     while (bufferPtr >= CRSF_MIN_PACKET_LEN)
     {
-        // Skip inter-frame bytes (normal on half-duplex)
         if (!isSyncByte(inBuffer[0]))
         {
             alignBufferToSync();
@@ -235,7 +161,7 @@ static void handleInput()
 
         if (totalLen < CRSF_MIN_PACKET_LEN || totalLen > CRSF_MAX_PACKET_LEN)
         {
-            badLenCount++;
+            badPktCount++;
             alignBufferToSync();
             continue;
         }
@@ -249,7 +175,7 @@ static void handleInput()
         }
         else
         {
-            badCrcCount++;
+            badPktCount++;
         }
 
         uint8_t remaining = bufferPtr - totalLen;
@@ -268,12 +194,9 @@ void setup()
 
     crc8_init();
 
-    uint32_t baud = detectBaudRate();
-    CrsfSerial.end();
-    delay(50);
-    CrsfSerial.begin(baud, SERIAL_8N1, CRSF_RX_PIN, CRSF_TX_PIN);
+    CrsfSerial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_RX_PIN, CRSF_TX_PIN);
     CrsfSerial.setTimeout(0);
-    setRxInversion(detectedInverted);
+    uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV);
 
     lastReportTime = millis();
 }
@@ -286,17 +209,14 @@ void loop()
     if (now - lastReportTime >= 1000)
     {
         uint32_t good = goodPktCount;
-        uint32_t bLen = badLenCount;
-        uint32_t bCrc = badCrcCount;
-        goodPktCount = badLenCount = badCrcCount = 0;
+        uint32_t bad = badPktCount;
+        goodPktCount = badPktCount = 0;
 
-        // Summary line
         Serial.printf("\n--- %u pkt/sec", good);
-        if (bLen || bCrc)
-            Serial.printf(" (err: %u len, %u crc)", bLen, bCrc);
+        if (bad)
+            Serial.printf(" (%u errors)", bad);
         Serial.println(" ---");
 
-        // Frame type breakdown
         for (int t = 0; t < 256; t++)
         {
             if (frameTypeCounts[t] > 0)
@@ -306,7 +226,6 @@ void loop()
             }
         }
 
-        // RC channels (if received)
         if (channels[0] != 0 || channels[1] != 0)
         {
             Serial.printf("  CH1-4: %4u %4u %4u %4u  CH5-8: %4u %4u %4u %4u\n",
