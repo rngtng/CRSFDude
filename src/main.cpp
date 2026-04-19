@@ -53,9 +53,10 @@ static inline bool isSyncByte(uint8_t b)
 static void duplex_set_RX()
 {
     gpio_set_direction((gpio_num_t)CRSF_PIN, GPIO_MODE_INPUT);
-    gpio_matrix_in((gpio_num_t)CRSF_PIN, U1RXD_IN_IDX, true); // inverted
+    gpio_matrix_in((gpio_num_t)CRSF_PIN, U1RXD_IN_IDX, false); // no inversion at matrix
     gpio_pulldown_en((gpio_num_t)CRSF_PIN);
     gpio_pullup_dis((gpio_num_t)CRSF_PIN);
+    uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV);     // invert at UART level
 }
 
 static void duplex_set_TX()
@@ -64,7 +65,7 @@ static void duplex_set_TX()
     gpio_set_level((gpio_num_t)CRSF_PIN, 0);
     gpio_set_direction((gpio_num_t)CRSF_PIN, GPIO_MODE_OUTPUT);
     gpio_matrix_in(MATRIX_DETACH_IN_LOW, U1RXD_IN_IDX, false); // disconnect RX
-    gpio_matrix_out((gpio_num_t)CRSF_PIN, U1TXD_OUT_IDX, true, false); // TX inverted
+    gpio_matrix_out((gpio_num_t)CRSF_PIN, U1TXD_OUT_IDX, true, false); // TX inverted at matrix
 }
 
 // RC Channels (packed 11-bit)
