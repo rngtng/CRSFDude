@@ -1,3 +1,8 @@
+---
+layout: default
+title: "CRSFDude: Custom CRSF Module with ESP32-C3 aka Half-Duplex Hell"
+---
+
 # CRSFDude: Custom CRSF Module with ESP32-C3 aka Half-Duplex Hell
 
 So I had this idea — plug an ESP32-C3 into the JR bay of my EdgeTX radio, read RC channels, send telemetry back. One signal wire, how hard can it be? Spoiler: two days of debugging to get a single telemetry value on screen. Here's the ride.
@@ -78,7 +83,7 @@ Voila! Radio stays happy. RC channels keep flowing, telemetry shows up, no freez
 
 ## What I ended up with
 
-A reusable [`CRSFProtocol` library](https://github.com/TODO) for ESP32-C3 that handles all the gnarly bits:
+A reusable [`CRSFProtocol` library](https://github.com/rngtng/CRSFDude) for ESP32-C3 that handles all the gnarly bits:
 
 - CRC8 calculation + frame parsing
 - All 16 RC channels (packed 11-bit decoding)
@@ -117,4 +122,4 @@ void loop() {
 - [mLRS](https://github.com/olliw42/mLRS) — the GPIO matrix pattern for JR Pin5 on ESP32
 - [EdgeTX Source](https://github.com/EdgeTX/edgetx/blob/main/radio/src/telemetry/crossfire.cpp) — where I found the handshake logic
 - [ExpressLRS](https://github.com/ExpressLRS/ExpressLRS) — half-duplex reference implementation
-- [CRSFDude on GitHub](https://github.com/TODO)
+- [CRSFDude on GitHub](https://github.com/rngtng/CRSFDude)

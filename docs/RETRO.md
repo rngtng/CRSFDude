@@ -1,3 +1,8 @@
+---
+layout: default
+title: "CRSFDude — Session Retro"
+---
+
 # CRSFDude — Session Retro
 
 ## What slowed us down
