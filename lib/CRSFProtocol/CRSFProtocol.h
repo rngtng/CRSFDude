@@ -59,11 +59,6 @@ private:
     static void IRAM_ATTR halfDuplexEnableRX(uint8_t pin);
     static void IRAM_ATTR halfDuplexEnableTX(uint8_t pin);
 
-    // TX done task
-    static TaskHandle_t _txDoneTaskHandle;
-    static uint8_t _txDonePin;
-    static void txDoneTask(void *param);
-
     // Parser state
     uint8_t _parseBuffer[CRSF_MAX_PACKET_LEN];
     uint8_t _parseBufferLen = 0;

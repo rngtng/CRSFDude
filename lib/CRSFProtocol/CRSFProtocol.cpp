@@ -4,8 +4,6 @@
 // Static members
 uint8_t CRSFProtocol::crc8_table[256];
 bool CRSFProtocol::crc8_initialized = false;
-TaskHandle_t CRSFProtocol::_txDoneTaskHandle = nullptr;
-uint8_t CRSFProtocol::_txDonePin = 0;
 
 // CRC8 with polynomial 0xD5
 void CRSFProtocol::crc8_init()
@@ -41,29 +39,14 @@ void IRAM_ATTR CRSFProtocol::halfDuplexEnableTX(uint8_t pin)
     gpio_matrix_out((gpio_num_t)pin, U1TXD_OUT_IDX, true, false);
 }
 
-// FreeRTOS task: wait for TX complete, then restore RX
-void CRSFProtocol::txDoneTask(void *param)
-{
-    while (true) {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        uart_wait_tx_done(UART_NUM_1, pdMS_TO_TICKS(20));
-        gpio_reset_pin((gpio_num_t)_txDonePin);
-        halfDuplexEnableRX(_txDonePin);
-        uart_ll_rxfifo_rst(UART_LL_GET_HW(1));
-    }
-}
-
 void CRSFProtocol::begin(uint8_t pin, uint32_t baudRate)
 {
     _pin = pin;
-    _txDonePin = pin;
 
     if (!crc8_initialized) crc8_init();
 
     _serial.begin(baudRate, SERIAL_8N1, pin, pin);
     _serial.setTimeout(0);
-
-    xTaskCreatePinnedToCore(txDoneTask, "CRSFTxDone", 2048, NULL, 5, &_txDoneTaskHandle, 0);
     halfDuplexEnableRX(pin);
 }
 
@@ -150,7 +133,10 @@ void CRSFProtocol::sendFrame(const uint8_t *frame, uint8_t length)
 {
     halfDuplexEnableTX(_pin);
     uart_write_bytes(UART_NUM_1, (const char *)frame, length);
-    xTaskNotifyGive(_txDoneTaskHandle);
+    uart_wait_tx_done(UART_NUM_1, pdMS_TO_TICKS(20));
+    gpio_reset_pin((gpio_num_t)_pin);
+    halfDuplexEnableRX(_pin);
+    uart_ll_rxfifo_rst(UART_LL_GET_HW(1));
     _parseBufferLen = 0;
     txPacketCount++;
 }

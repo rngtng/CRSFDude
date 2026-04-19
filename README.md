@@ -70,5 +70,5 @@ void loop() {
 
 1. **Signal is inverted** on JR bay S.PORT — EdgeTX radios have a hardware inverter IC
 2. **GPIO matrix** handles inversion and half-duplex pin switching on ESP32-C3 (no `uart_set_line_inverse`)
-3. **FreeRTOS task** needed for TX completion + RX restore (`gpio_reset_pin` required on C3)
+3. **`gpio_reset_pin()` required** on ESP32-C3 to fully release the TX output after sending
 4. **EdgeTX handshake** is mandatory — radio sends Device Ping (0x28) after detecting telemetry; must respond with Device Info (0x29) or radio freezes permanently
