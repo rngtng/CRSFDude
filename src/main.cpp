@@ -69,22 +69,21 @@ static void crsfSend(const uint8_t *buf, uint8_t len)
     gpio_matrix_in(MATRIX_DETACH_IN_LOW, U1RXD_IN_IDX, false);
     gpio_set_direction((gpio_num_t)CRSF_PIN, GPIO_MODE_OUTPUT);
     gpio_matrix_out((gpio_num_t)CRSF_PIN, U1TXD_OUT_IDX, true, false);
+    delayMicroseconds(10);
 
-    // 2. Send
-    CrsfSerial.write(buf, len);
-    CrsfSerial.flush();
-    delayMicroseconds(300);
+    // 2. Send via low-level API and wait for HW completion
+    uart_write_bytes(UART_NUM_1, (const char *)buf, len);
+    uart_wait_tx_done(UART_NUM_1, pdMS_TO_TICKS(50));
+    delayMicroseconds(200);
 
-    // 3. Detach TX output from pin (stop driving the line)
+    // 3. Detach TX, restore pin to input
     gpio_matrix_out((gpio_num_t)CRSF_PIN, SIG_GPIO_OUT_IDX, false, false);
     gpio_set_direction((gpio_num_t)CRSF_PIN, GPIO_MODE_INPUT);
 
-    // 4. Fully reinit UART for RX (proven method)
-    CrsfSerial.end();
-    CrsfSerial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_PIN, CRSF_PIN);
-    CrsfSerial.setTimeout(0);
-    uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV);
+    // 4. Reconnect RX
+    gpio_matrix_in((gpio_num_t)CRSF_PIN, U1RXD_IN_IDX, false);
 
+    while (CrsfSerial.available()) CrsfSerial.read();
     bufferPtr = 0;
     txCount++;
 }
@@ -156,7 +155,7 @@ static void handleInput()
                 pktCount++;
                 decodeChannels(&inBuffer[3]);
                 // Send telemetry every 10th frame
-                if (pktCount % 10 == 0)
+                if (pktCount % 5 == 0)
                 {
                     sendFlightMode();
                     return;
