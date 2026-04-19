@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include "driver/uart.h"
 #include "driver/gpio.h"
-#include "hal/uart_ll.h"
 
 // CRSF Protocol
 #define CRSF_SYNC_BYTE        0xC8
@@ -12,10 +11,7 @@
 #define CRSF_BAUD             420000
 #define CRSF_RC_CHANNELS      0x16
 
-// Single-wire half-duplex on pin 20
 #define CRSF_PIN 20
-
-// Constant to disconnect RX from pin (routes LOW to UART RX input)
 #define MATRIX_DETACH_IN_LOW 0x30
 
 // CRC
@@ -48,26 +44,6 @@ static inline bool isSyncByte(uint8_t b)
     return b == CRSF_SYNC_BYTE || b == CRSF_SYNC_BYTE_TX;
 }
 
-// Half-duplex switching via GPIO matrix (from ExpressLRS)
-// Key: use gpio_matrix for inversion, NOT uart_set_line_inverse
-static void duplex_set_RX()
-{
-    gpio_set_direction((gpio_num_t)CRSF_PIN, GPIO_MODE_INPUT);
-    gpio_matrix_in((gpio_num_t)CRSF_PIN, U1RXD_IN_IDX, false); // no inversion at matrix
-    gpio_pulldown_en((gpio_num_t)CRSF_PIN);
-    gpio_pullup_dis((gpio_num_t)CRSF_PIN);
-    uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV);     // invert at UART level
-}
-
-static void duplex_set_TX()
-{
-    gpio_set_pull_mode((gpio_num_t)CRSF_PIN, GPIO_FLOATING);
-    gpio_set_level((gpio_num_t)CRSF_PIN, 0);
-    gpio_set_direction((gpio_num_t)CRSF_PIN, GPIO_MODE_OUTPUT);
-    gpio_matrix_in(MATRIX_DETACH_IN_LOW, U1RXD_IN_IDX, false); // disconnect RX
-    gpio_matrix_out((gpio_num_t)CRSF_PIN, U1TXD_OUT_IDX, true, false); // TX inverted at matrix
-}
-
 // RC Channels (packed 11-bit)
 static uint16_t channels[4];
 
@@ -79,36 +55,38 @@ static void decodeChannels(const uint8_t *p)
     channels[3] = ((uint16_t)p[4] >> 1 | (uint16_t)p[5] << 7) & 0x07FF;
 }
 
+// Parser state
+static uint8_t inBuffer[CRSF_MAX_PACKET_LEN];
+static uint8_t bufferPtr = 0;
+static uint32_t pktCount = 0;
 static uint32_t txCount = 0;
+static uint32_t lastReportTime = 0;
 
+// TX: connect UART TX to pin (inverted), send, then fully disconnect TX and reinit RX
 static void crsfSend(const uint8_t *buf, uint8_t len)
 {
-    duplex_set_TX();
+    // 1. Disconnect RX, switch pin to TX output (inverted)
+    gpio_matrix_in(MATRIX_DETACH_IN_LOW, U1RXD_IN_IDX, false);
+    gpio_set_direction((gpio_num_t)CRSF_PIN, GPIO_MODE_OUTPUT);
+    gpio_matrix_out((gpio_num_t)CRSF_PIN, U1TXD_OUT_IDX, true, false);
+
+    // 2. Send
     CrsfSerial.write(buf, len);
     CrsfSerial.flush();
-    while (!uart_ll_is_tx_idle(UART_LL_GET_HW(1))) {}
-    duplex_set_RX();
-    delayMicroseconds(100); // let pin settle back to input
-    while (CrsfSerial.available()) CrsfSerial.read();
-    txCount++;
-}
+    delayMicroseconds(300);
 
-static void sendBatteryTelemetry()
-{
-    uint8_t buffer[12];
-    buffer[0]  = 0xC8;
-    buffer[1]  = 10;
-    buffer[2]  = 0x08;          // Battery
-    buffer[3]  = 0x00;          // Voltage high
-    buffer[4]  = 111;           // Voltage low (11.1V)
-    buffer[5]  = 0x00;          // Current high
-    buffer[6]  = 15;            // Current low (1.5A)
-    buffer[7]  = 0x00;
-    buffer[8]  = 0x00;
-    buffer[9]  = 100;           // Used capacity (100 mAh)
-    buffer[10] = 75;            // Remaining %
-    buffer[11] = crc8_calc(&buffer[2], 9);
-    crsfSend(buffer, 12);
+    // 3. Detach TX output from pin (stop driving the line)
+    gpio_matrix_out((gpio_num_t)CRSF_PIN, SIG_GPIO_OUT_IDX, false, false);
+    gpio_set_direction((gpio_num_t)CRSF_PIN, GPIO_MODE_INPUT);
+
+    // 4. Fully reinit UART for RX (proven method)
+    CrsfSerial.end();
+    CrsfSerial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_PIN, CRSF_PIN);
+    CrsfSerial.setTimeout(0);
+    uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV);
+
+    bufferPtr = 0;
+    txCount++;
 }
 
 static void sendFlightMode()
@@ -131,17 +109,6 @@ static void sendFlightMode()
     buffer[3 + strLen] = crc8_calc(&buffer[2], strLen + 1);
     crsfSend(buffer, 3 + strLen + 1);
 }
-
-static void replyWithTelemetry()
-{
-    sendFlightMode();
-}
-
-// Parser
-static uint8_t inBuffer[CRSF_MAX_PACKET_LEN];
-static uint8_t bufferPtr = 0;
-static uint32_t pktCount = 0;
-static uint32_t lastReportTime = 0;
 
 static void alignBufferToSync()
 {
@@ -188,7 +155,12 @@ static void handleInput()
             {
                 pktCount++;
                 decodeChannels(&inBuffer[3]);
-                replyWithTelemetry();
+                // Send telemetry every 10th frame
+                if (pktCount % 10 == 0)
+                {
+                    sendFlightMode();
+                    return;
+                }
             }
         }
 
@@ -207,11 +179,9 @@ void setup()
     Serial.println("CRSFDude starting...");
 
     crc8_init();
-    // Init UART with pin 20 for both RX/TX, NO uart_set_line_inverse
     CrsfSerial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_PIN, CRSF_PIN);
     CrsfSerial.setTimeout(0);
-    // Use GPIO matrix for RX inversion (not uart_set_line_inverse)
-    duplex_set_RX();
+    uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV);
 
     lastReportTime = millis();
 }
