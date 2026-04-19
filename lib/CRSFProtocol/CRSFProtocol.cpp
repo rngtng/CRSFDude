@@ -253,6 +253,27 @@ void CRSFProtocol::sendVario(int16_t verticalSpeed)
     sendFrame(frame, pos);
 }
 
+void CRSFProtocol::sendLinkStats(uint8_t rxRssi1, uint8_t rxRssi2, uint8_t rxQuality, int8_t rxSnr,
+                                  uint8_t antenna, uint8_t rfMode, uint8_t txPower,
+                                  uint8_t txRssi, uint8_t txQuality, int8_t txSnr)
+{
+    // Payload: 10 bytes, one per field. rxQuality MUST be non-zero to enable telemetry streaming.
+    uint8_t frame[14];
+    uint8_t pos = buildFrameHeader(frame, CRSF_FRAMETYPE_LINK_STATS, 10);
+    frame[pos++] = rxRssi1;
+    frame[pos++] = rxRssi2;
+    frame[pos++] = rxQuality;
+    frame[pos++] = rxSnr;
+    frame[pos++] = antenna;
+    frame[pos++] = rfMode;
+    frame[pos++] = txPower;
+    frame[pos++] = txRssi;
+    frame[pos++] = txQuality;
+    frame[pos++] = txSnr;
+    frame[pos] = crc8(&frame[2], pos - 2); pos++;
+    sendFrame(frame, pos);
+}
+
 void CRSFProtocol::alignBufferToSync()
 {
     uint8_t i = 1;

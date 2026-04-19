@@ -22,14 +22,21 @@ void loop()
 {
     bool newChannels = crsf.update();
 
-    // Send telemetry every 5th RC packet
+    // Send link stats every cycle to keep EdgeTX telemetry streaming active,
+    // then rotate one sensor per cycle
     if (newChannels && crsf.rxPacketCount % 5 == 0) {
-        crsf.sendFlightMode("ACRO");
-        crsf.sendBattery(111, 15, 1200, 75);          // 11.1V, 1.5A, 1200mAh, 75%
-        crsf.sendAttitude(1500, -300, 0);              // pitch 0.15rad, roll -0.03rad
-        crsf.sendGPS(524213670, 133560120, 250, 18000, 120, 12); // Berlin, 2.5m/s, 180°, 120m, 12 sats
-        crsf.sendBaroAltitude(12034);                  // 120.34m
-        crsf.sendVario(150);                           // 1.5m/s climb
+        // Link stats with non-zero RxQuality — required for sensor discovery
+        crsf.sendLinkStats(90, 90, 100, 10, 0, 4, 3, 80, 100, 8);
+
+        static uint8_t telemetrySlot = 0;
+        switch (telemetrySlot++ % 6) {
+            case 0: crsf.sendFlightMode("ACRO"); break;
+            case 1: crsf.sendBattery(111, 15, 1200, 75); break;             // 11.1V, 1.5A, 1200mAh, 75%
+            case 2: crsf.sendAttitude(1500, -300, 0); break;                // pitch 0.15rad, roll -0.03rad
+            case 3: crsf.sendGPS(524213670, 133560120, 250, 18000, 120, 12); break; // Berlin
+            case 4: crsf.sendBaroAltitude(12034); break;                    // 120.34m
+            case 5: crsf.sendVario(150); break;                             // 1.5m/s climb
+        }
     }
 
     // Report once per second

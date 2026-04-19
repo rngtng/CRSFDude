@@ -32,6 +32,10 @@ ESP32-C3 firmware acting as a CRSF external module in a JR bay. Single-wire half
 
 **EdgeTX handshake is mandatory.** When the radio receives any valid telemetry, it sends Device Ping (0x28). Must respond with Device Info (0x29) or the radio permanently freezes (requires power cycle). The library handles this automatically in `processFrame()`.
 
+**Link Stats enables telemetry streaming.** EdgeTX silently drops ALL sensor data (except flight mode) unless Link Statistics (0x14) with non-zero RxQuality has been received. Must be sent regularly.
+
+**One frame per response window.** Sending multiple telemetry frames back-to-back causes collisions with the radio's next TX cycle. Rotate sensor types across response windows.
+
 **Baud rate is 420000.** Non-standard, required by CRSF protocol. Must match the radio's configured external module baud rate exactly.
 
 ## CRSF Frame Format

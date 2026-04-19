@@ -62,6 +62,12 @@ public:
     // Variometer: vertical speed in cm/s
     void sendVario(int16_t verticalSpeed);
 
+    // Link statistics — MUST be sent to enable telemetry streaming in EdgeTX
+    // Without this, all sensors except flight mode are silently dropped
+    void sendLinkStats(uint8_t rxRssi1, uint8_t rxRssi2, uint8_t rxQuality, int8_t rxSnr,
+                       uint8_t antenna, uint8_t rfMode, uint8_t txPower,
+                       uint8_t txRssi, uint8_t txQuality, int8_t txSnr);
+
     // Device info (required for EdgeTX handshake)
     void sendDeviceInfo(const char *deviceName);
 
