@@ -55,6 +55,38 @@ static void decodeChannels(const uint8_t *p)
     channels[3] = ((uint16_t)p[4] >> 1 | (uint16_t)p[5] << 7) & 0x07FF;
 }
 
+// --- NEW: CRSF TELEMETRY INJECTION ---
+static void replyWithTelemetry() 
+{
+    static uint32_t lastToggleTime = 0;
+    static bool isSignalOn = false;
+    
+    uint32_t now = millis();
+    // Toggle between ON/OFF every 2 seconds
+    if (now - lastToggleTime >= 2000) {
+        isSignalOn = !isSignalOn;
+        lastToggleTime = now;
+    }
+
+    const char* modeString = isSignalOn ? "ON" : "OFF";
+    uint8_t strLen = strlen(modeString) + 1; // Includes null terminator
+    uint8_t frameLen = 1 + strLen + 1;       // Type + String + CRC
+    
+    uint8_t buffer[32];
+    buffer[0] = 0xEA;           // Sync: Send to Handset (EdgeTX/OpenTX)
+    buffer[1] = frameLen;       // Length
+    buffer[2] = 0x21;           // Type: Flight Mode (0x21)
+    
+    memcpy(&buffer[3], modeString, strLen);
+    
+    // Reuse existing CRC lookup table over Type and Payload
+    buffer[3 + strLen] = crc8_calc(&buffer[2], strLen + 1);
+    
+    // Write out to the radio
+    CrsfSerial.write(buffer, 3 + strLen + 1);
+}
+// -------------------------------------
+
 // Parser
 static uint8_t inBuffer[CRSF_MAX_PACKET_LEN];
 static uint8_t bufferPtr = 0;
@@ -106,6 +138,9 @@ static void handleInput()
             {
                 pktCount++;
                 decodeChannels(&inBuffer[3]);
+                
+                // NEW: Fire telemetry immediately after successfully decoding RC channels
+                replyWithTelemetry();
             }
         }
 
@@ -125,6 +160,10 @@ void setup()
 
     crc8_init();
     CrsfSerial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_RX_PIN, CRSF_TX_PIN);
+    
+    // NEW: Ensure Half-Duplex mode is explicitly enabled for single-wire shared TX/RX
+    CrsfSerial.setHalfDuplex(true); 
+
     CrsfSerial.setTimeout(0);
     uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV);
 
