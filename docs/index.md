@@ -5,7 +5,7 @@ title: CRSFDude
 
 # CRSFDude
 
-Custom CRSF external module for ESP32-C3 — reads RC channels and sends telemetry over half-duplex inverted UART in a JR bay.
+An Arduino/PlatformIO library for building CRSF external modules on ESP32-C3. Handles half-duplex inverted UART, RC channel decoding, telemetry TX, and the EdgeTX handshake.
 
 - [Blog Post](BLOGPOST) — the full story of building CRSFDude, from inverted signals to frozen radios
 - [Retro](RETRO) — what went well, what didn't, lessons learned

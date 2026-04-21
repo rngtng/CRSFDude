@@ -5,10 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build, Flash & Test
 
 ```bash
-pio run -e esp32c3 -t upload    # build and flash
+pio run -e example_basic -t upload    # build and flash
 pio device monitor              # serial monitor (115200 baud)
 pio test -e native              # run unit tests on host (no device needed)
-pio test -e esp32c3             # run integration tests on device
+pio test -e example_basic             # run integration tests on device
 ```
 
 ## Architecture
@@ -28,7 +28,7 @@ Arduino/PlatformIO library for building CRSF external modules on ESP32-C3. Singl
 
 **`test/test_native/`** — Host-side unit tests (CRC, channel encode/decode, frame encoding). Run via `pio test -e native`.
 
-**`test/test_embedded/`** — On-device tests. Run via `pio test -e esp32c3`.
+**`test/test_embedded/`** — On-device tests. Run via `pio test -e example_basic`.
 
 ## Critical Constraints
 

@@ -123,7 +123,7 @@ These are the sensor names that appear in EdgeTX after discovery:
 
 ```bash
 pio test -e native              # run tests (no device needed)
-pio run -e esp32c3 -t upload    # build & flash example
+pio run -e example_basic -t upload    # build & flash example
 pio device monitor              # serial monitor
 ```
 
