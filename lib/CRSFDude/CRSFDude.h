@@ -75,8 +75,9 @@ public:
     uint32_t rxPacketCount = 0;
     uint32_t txPacketCount = 0;
 
-    // Callback: called when Device Ping received (default: auto-responds with device info)
-    void (*onDevicePing)() = nullptr;
+    // Callbacks
+    void (*onDevicePing)() = nullptr;       // Device Ping received (default: auto-responds with device info)
+    void (*onChannelsReceived)() = nullptr; // New RC channel data decoded
 
     // CRC8 utility (public for custom frame building)
     static uint8_t crc8(const uint8_t *data, uint16_t length);

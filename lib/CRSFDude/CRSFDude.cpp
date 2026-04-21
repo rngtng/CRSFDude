@@ -107,6 +107,7 @@ void CRSFDude::processFrame(uint8_t frameType, uint8_t totalLength)
         _channels[13] = ((uint16_t)p[17] >> 7 | (uint16_t)p[18] << 1 | (uint16_t)p[19] << 9) & 0x07FF;
         _channels[14] = ((uint16_t)p[19] >> 2 | (uint16_t)p[20] << 6) & 0x07FF;
         _channels[15] = ((uint16_t)p[20] >> 5 | (uint16_t)p[21] << 3) & 0x07FF;
+        if (onChannelsReceived) onChannelsReceived();
     }
     else if (frameType == CRSF_FRAMETYPE_DEVICE_PING) {
         if (onDevicePing) {
