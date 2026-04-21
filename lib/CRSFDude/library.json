@@ -1,0 +1,13 @@
+{
+  "name": "CRSFDude",
+  "version": "1.0.0",
+  "description": "CRSF half-duplex library for ESP32-C3 JR bay modules. Reads RC channels, sends telemetry, handles EdgeTX handshake.",
+  "keywords": "crsf, crossfire, elrs, edgetx, half-duplex, jr-bay, telemetry, esp32-c3",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rngtng/CRSFDude.git"
+  },
+  "license": "MIT",
+  "frameworks": "arduino",
+  "platforms": "espressif32"
+}
