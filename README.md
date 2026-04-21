@@ -108,6 +108,9 @@ void loop() {
 | `sendVario(cm/s)` | Vertical speed in cm/s |
 | `sendDeviceInfo(name)` | Device info (auto-called on Device Ping) |
 | `sendFrame(buf, len)` | Send raw CRSF frame |
+| `modelId` | Active model ID (0-63), set by radio on model switch |
+| `onModelIdChanged` | Callback fired when radio switches model |
+| `onDevicePing` | Callback for Device Ping (default: auto-responds) |
 
 ### EdgeTX Sensor Names
 
