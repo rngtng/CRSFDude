@@ -22,6 +22,11 @@
 #define CRSF_FRAMETYPE_FLIGHT_MODE  0x21
 #define CRSF_FRAMETYPE_DEVICE_PING  0x28
 #define CRSF_FRAMETYPE_DEVICE_INFO  0x29
+#define CRSF_FRAMETYPE_COMMAND      0x32
+
+// Command sub-types
+#define CRSF_SUBCOMMAND_CRSF           0x10
+#define CRSF_COMMAND_MODEL_SELECT_ID   0x05
 
 // Addresses
 #define CRSF_ADDRESS_RADIO          0xEA
@@ -75,8 +80,12 @@ public:
     uint32_t rxPacketCount = 0;
     uint32_t txPacketCount = 0;
 
-    // Callback: called when Device Ping received (default: auto-responds with device info)
-    void (*onDevicePing)() = nullptr;
+    // Active model ID (0-63, set by radio via Model Select command)
+    uint8_t modelId = 0;
+
+    // Callbacks
+    void (*onDevicePing)() = nullptr;          // Device Ping received (default: auto-responds)
+    void (*onModelIdChanged)(uint8_t id) = nullptr; // Model ID changed by radio
 
     // CRC8 utility (public for custom frame building)
     static uint8_t crc8(const uint8_t *data, uint16_t length);

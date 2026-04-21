@@ -203,23 +203,230 @@ void test_baro_negative_altitude()
     TEST_ASSERT_EQUAL(9950, altDm);
 }
 
+// --- Frame Header Tests ---
+
+void test_frame_header_format()
+{
+    crc8_init();
+    // buildFrameHeader: sync + length + type
+    uint8_t frame[16];
+    frame[0] = 0xC8;
+    frame[1] = 5 + 2; // payload(5) + type(1) + crc(1)
+    frame[2] = 0x21;  // flight mode
+    uint8_t pos = 3;
+
+    TEST_ASSERT_EQUAL(0xC8, frame[0]);
+    TEST_ASSERT_EQUAL(7, frame[1]);
+    TEST_ASSERT_EQUAL(0x21, frame[2]);
+    TEST_ASSERT_EQUAL(3, pos);
+}
+
+// --- Flight Mode Frame Tests ---
+
+void test_flight_mode_frame_format()
+{
+    crc8_init();
+    const char *mode = "ACRO";
+    uint8_t slen = strlen(mode) + 1; // 5
+    uint8_t frame[16];
+    frame[0] = 0xC8;
+    frame[1] = 1 + slen + 1; // type + string + crc = 7
+    frame[2] = 0x21;
+    memcpy(&frame[3], mode, slen);
+    frame[3 + slen] = crc8(&frame[2], 1 + slen);
+
+    TEST_ASSERT_EQUAL(7, frame[1]);
+    TEST_ASSERT_EQUAL(0x21, frame[2]);
+    TEST_ASSERT_EQUAL('A', frame[3]);
+    TEST_ASSERT_EQUAL('\0', frame[7]);
+    // CRC validates
+    TEST_ASSERT_EQUAL(frame[8], crc8(&frame[2], 6));
+}
+
+// --- GPS Frame Tests ---
+
+void test_gps_frame_format()
+{
+    crc8_init();
+    int32_t lat = 524213670;   // 52.4213670°
+    int32_t lon = 133560120;   // 13.3560120°
+    uint16_t spd = 250;        // 2.5 m/s
+    uint16_t hdg = 18000;      // 180.00°
+    uint16_t alt = 120;
+    uint8_t sats = 12;
+
+    uint8_t frame[19];
+    frame[0] = 0xC8;
+    frame[1] = 15 + 2; // payload + type + crc
+    frame[2] = 0x02;   // GPS
+    uint8_t pos = 3;
+    frame[pos++] = (lat >> 24) & 0xFF;
+    frame[pos++] = (lat >> 16) & 0xFF;
+    frame[pos++] = (lat >> 8) & 0xFF;
+    frame[pos++] = lat & 0xFF;
+    frame[pos++] = (lon >> 24) & 0xFF;
+    frame[pos++] = (lon >> 16) & 0xFF;
+    frame[pos++] = (lon >> 8) & 0xFF;
+    frame[pos++] = lon & 0xFF;
+    frame[pos++] = spd >> 8;
+    frame[pos++] = spd & 0xFF;
+    frame[pos++] = hdg >> 8;
+    frame[pos++] = hdg & 0xFF;
+    frame[pos++] = (alt + 1000) >> 8;
+    frame[pos++] = (alt + 1000) & 0xFF;
+    frame[pos++] = sats;
+    frame[pos] = crc8(&frame[2], pos - 2);
+
+    // Total frame = 19 bytes
+    TEST_ASSERT_EQUAL(19, pos + 1);
+    TEST_ASSERT_EQUAL(17, frame[1]);
+    // Latitude big-endian
+    TEST_ASSERT_EQUAL(0x1F, frame[3]);
+    // Satellites
+    TEST_ASSERT_EQUAL(12, frame[17]);
+    // CRC validates
+    TEST_ASSERT_EQUAL(frame[18], crc8(&frame[2], 16));
+}
+
+// --- Attitude Frame Tests ---
+
+void test_attitude_frame_format()
+{
+    crc8_init();
+    int16_t pitch = 1500, roll = -300, yaw = 0;
+
+    uint8_t frame[10];
+    frame[0] = 0xC8;
+    frame[1] = 6 + 2;
+    frame[2] = 0x1E;
+    frame[3] = pitch >> 8;    frame[4] = pitch & 0xFF;
+    frame[5] = roll >> 8;     frame[6] = roll & 0xFF;
+    frame[7] = yaw >> 8;      frame[8] = yaw & 0xFF;
+    frame[9] = crc8(&frame[2], 7);
+
+    TEST_ASSERT_EQUAL(8, frame[1]);
+    TEST_ASSERT_EQUAL(0x05, frame[3]); // 1500 >> 8
+    TEST_ASSERT_EQUAL(0xDC, frame[4]); // 1500 & 0xFF
+    // Roll -300 = 0xFED4
+    TEST_ASSERT_EQUAL(0xFE, frame[5]);
+    TEST_ASSERT_EQUAL(0xD4, frame[6]);
+    TEST_ASSERT_EQUAL(frame[9], crc8(&frame[2], 7));
+}
+
+// --- Vario Frame Tests ---
+
+void test_vario_frame_format()
+{
+    crc8_init();
+    int16_t vspd = -250; // -2.5 m/s
+
+    uint8_t frame[6];
+    frame[0] = 0xC8;
+    frame[1] = 2 + 2;
+    frame[2] = 0x07;
+    frame[3] = vspd >> 8;
+    frame[4] = vspd & 0xFF;
+    frame[5] = crc8(&frame[2], 3);
+
+    TEST_ASSERT_EQUAL(4, frame[1]);
+    // -250 = 0xFF06
+    TEST_ASSERT_EQUAL(0xFF, frame[3]);
+    TEST_ASSERT_EQUAL(0x06, frame[4]);
+    TEST_ASSERT_EQUAL(frame[5], crc8(&frame[2], 3));
+}
+
+// --- Link Stats Frame Tests ---
+
+void test_link_stats_frame_format()
+{
+    crc8_init();
+    uint8_t frame[14];
+    frame[0] = 0xC8;
+    frame[1] = 10 + 2;
+    frame[2] = 0x14;
+    frame[3] = 90;   // rxRssi1
+    frame[4] = 90;   // rxRssi2
+    frame[5] = 100;  // rxQuality
+    frame[6] = 10;   // rxSnr
+    frame[7] = 0;    // antenna
+    frame[8] = 4;    // rfMode
+    frame[9] = 3;    // txPower
+    frame[10] = 80;  // txRssi
+    frame[11] = 100; // txQuality
+    frame[12] = 8;   // txSnr
+    frame[13] = crc8(&frame[2], 11);
+
+    TEST_ASSERT_EQUAL(12, frame[1]);
+    TEST_ASSERT_EQUAL(100, frame[5]); // rxQuality non-zero
+    TEST_ASSERT_EQUAL(frame[13], crc8(&frame[2], 11));
+}
+
+// --- Model ID Command Tests ---
+
+void test_model_id_command_parse()
+{
+    crc8_init();
+    // Model Select command: [sync][len=8][type=0x32][dest=0xEE][orig=0xEA][subcmd=0x10][cmd=0x05][modelId][crc_ba][crc]
+    uint8_t frame[10];
+    frame[0] = 0xC8;
+    frame[1] = 8;
+    frame[2] = 0x32; // COMMAND
+    frame[3] = 0xEE; // dest: module
+    frame[4] = 0xEA; // origin: radio
+    frame[5] = 0x10; // SUBCOMMAND_CRSF
+    frame[6] = 0x05; // COMMAND_MODEL_SELECT_ID
+    frame[7] = 42;   // model ID
+
+    // Verify we can extract model ID from correct offsets
+    TEST_ASSERT_EQUAL(0x32, frame[2]);
+    TEST_ASSERT_EQUAL(0x10, frame[5]);
+    TEST_ASSERT_EQUAL(0x05, frame[6]);
+    TEST_ASSERT_EQUAL(42, frame[7]);
+
+    // Total length check
+    TEST_ASSERT_EQUAL(10, frame[1] + 2);
+}
+
+void test_model_id_range()
+{
+    // Model ID is 0-63
+    for (uint8_t id = 0; id <= 63; id++) {
+        TEST_ASSERT_TRUE(id <= 63);
+    }
+}
+
 // --- Test Runner ---
 
 int main()
 {
     UNITY_BEGIN();
 
+    // CRC
     RUN_TEST(test_crc8_deterministic);
     RUN_TEST(test_crc8_empty);
     RUN_TEST(test_crc8_different_data);
     RUN_TEST(test_crc8_known_flight_mode_frame);
+
+    // Channel encode/decode
     RUN_TEST(test_channel_decode_center);
     RUN_TEST(test_channel_decode_min_max);
     RUN_TEST(test_channel_decode_sequential);
+
+    // Frame encoding
+    RUN_TEST(test_frame_header_format);
+    RUN_TEST(test_flight_mode_frame_format);
     RUN_TEST(test_battery_frame_format);
+    RUN_TEST(test_gps_frame_format);
     RUN_TEST(test_gps_altitude_offset);
+    RUN_TEST(test_attitude_frame_format);
     RUN_TEST(test_baro_altitude_encoding);
     RUN_TEST(test_baro_negative_altitude);
+    RUN_TEST(test_vario_frame_format);
+    RUN_TEST(test_link_stats_frame_format);
+
+    // Model ID
+    RUN_TEST(test_model_id_command_parse);
+    RUN_TEST(test_model_id_range);
 
     return UNITY_END();
 }

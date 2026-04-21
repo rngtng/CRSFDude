@@ -8,6 +8,11 @@ CRSFDude crsf;
 
 static uint32_t lastReportTime = 0;
 
+void onModelChanged(uint8_t id)
+{
+    Serial.printf("Model switched to %d\n", id);
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -16,6 +21,7 @@ void setup()
     Serial.println("CRSFDude starting...");
 
     crsf.begin(CRSF_PIN, CRSF_BAUD);
+    crsf.onModelIdChanged = onModelChanged;
 }
 
 void loop()
@@ -42,10 +48,10 @@ void loop()
     // Report once per second
     uint32_t now = millis();
     if (now - lastReportTime >= 1000) {
-        Serial.printf("CH1: %4u  CH2: %4u  CH3: %4u  CH4: %4u  [rx:%u tx:%u /s]\n",
+        Serial.printf("CH1: %4u  CH2: %4u  CH3: %4u  CH4: %4u  [rx:%u tx:%u /s] model:%u\n",
                       crsf.getChannel(0), crsf.getChannel(1),
                       crsf.getChannel(2), crsf.getChannel(3),
-                      crsf.rxPacketCount, crsf.txPacketCount);
+                      crsf.rxPacketCount, crsf.txPacketCount, crsf.modelId);
         crsf.rxPacketCount = crsf.txPacketCount = 0;
         lastReportTime = now;
     }
