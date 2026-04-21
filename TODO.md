@@ -25,7 +25,7 @@
 
 - [x] Unit tests for CRC8, frame building, channel decoding (`pio test -e native`)
 - [x] CI workflow for native tests (GitHub Actions)
-- [ ] Document expected EdgeTX sensor names for each telemetry type
+- [x] Document expected EdgeTX sensor names for each telemetry type
 
 ## Ideas
 

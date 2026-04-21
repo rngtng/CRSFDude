@@ -109,6 +109,20 @@ void loop() {
 | `sendDeviceInfo(name)` | Device info (auto-called on Device Ping) |
 | `sendFrame(buf, len)` | Send raw CRSF frame |
 
+### EdgeTX Sensor Names
+
+These are the sensor names that appear in EdgeTX after discovery:
+
+| Method | EdgeTX Sensors | Unit |
+|--------|----------------|------|
+| `sendLinkStats(...)` | 1RSS, 2RSS, RQly, RSNR, ANT, RFMD, TPWR, TRSS, TQly, TSNR | dB, %, mW |
+| `sendFlightMode()` | FM | text |
+| `sendBattery()` | RxBt, Curr, Capa, Bat% | V, A, mAh, % |
+| `sendGPS()` | GPS, GSpd, Hdg, GAlt, Sats | deg, km/h, deg, m, count |
+| `sendAttitude()` | Ptch, Roll, Yaw | rad |
+| `sendBaroAltitude()` | Alt | m |
+| `sendVario()` | VSpd | m/s |
+
 ## Key Learnings
 
 1. **Signal is inverted** on JR bay S.PORT — EdgeTX radios have a hardware inverter IC
