@@ -10,14 +10,16 @@ graph LR
         direction TB
         Radio[External RF<br/>JR bay]
     end
-    Radio -- "Pin 4 → GND" --- ESP[ESP32-C3<br/>CRSFDude]
 
-    subgraph "Pin 5 →  S.PORT"
+    Radio -- "Pin 3 → VBat" --- DC[Step-Down<br/>to 3.3V] -- "3V3" --- ESP[ESP32-C3<br/>CRSFDude]
+    Radio -- "Pin 4 → GND" --- ESP
+
+    subgraph "Pin 5 → S.PORT"
         direction LR
         HD[CRSF<br/>Half-Duplex<br/>Inverted UART<br/>420kbaud]
     end
 
-    Radio --- HD -- GPIO 21 --- ESP
+    Radio --- HD -- "GPIO 20" --- ESP
 ```
 
 ## Features
@@ -49,8 +51,9 @@ The hard parts — half-duplex GPIO matrix switching, inverted signal handling, 
 ## Hardware
 
 - **Board:** ESP32-C3 DevKit
-- **CRSF Pin:** GPIO 20 — connects to JR bay S.PORT (signal pin)
-- **Signal:** Inverted UART, idle LOW, 420000 baud, 8N1
+- **Pin 3 (VBat):** Radio battery voltage — needs a step-down converter (buck/LDO) to 3.3V for the ESP32-C3
+- **Pin 4 (GND):** Ground
+- **Pin 5 (S.PORT):** GPIO 20 — CRSF half-duplex, inverted UART, 420kbaud, 8N1
 
 ## Build & Flash
 
