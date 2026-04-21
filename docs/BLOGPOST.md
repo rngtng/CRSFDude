@@ -124,4 +124,4 @@ void loop() {
 - [mLRS](https://github.com/olliw42/mLRS) — the GPIO matrix pattern for JR Pin5 on ESP32
 - [EdgeTX Source](https://github.com/EdgeTX/edgetx/blob/main/radio/src/telemetry/crossfire.cpp) — where I found the handshake logic
 - [ExpressLRS](https://github.com/ExpressLRS/ExpressLRS) — half-duplex reference implementation
-- [CRSFDude on GitHub](https://github.com/rngtng/CRSFDude)
+- [Getting Started with ESP32-C3 Super Mini](https://randomnerdtutorials.com/getting-started-esp32-c3-super-mini/)

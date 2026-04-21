@@ -2,6 +2,24 @@
 
 ESP32-C3 firmware that acts as a CRSF external module in a JR bay. Reads RC channels from the radio over half-duplex inverted UART and sends telemetry back.
 
+## Architecture
+
+```mermaid
+graph LR
+    subgraph "EdgeTX Radio"
+        direction TB
+        Radio[External RF<br/>JR bay]
+    end
+    Radio -- "Pin 4 → GND" --- ESP[ESP32-C3<br/>CRSFDude]
+
+    subgraph "Pin 5 →  S.PORT"
+        direction LR
+        HD[CRSF<br/>Half-Duplex<br/>Inverted UART<br/>420kbaud]
+    end
+
+    Radio --- HD -- GPIO 21 --- ESP
+```
+
 ## Features
 
 - Single-wire half-duplex CRSF on GPIO 20 (inverted signal, 420kbaud)
@@ -9,6 +27,24 @@ ESP32-C3 firmware that acts as a CRSF external module in a JR bay. Reads RC chan
 - Sends telemetry back to EdgeTX (flight mode, battery, etc.)
 - Handles EdgeTX Device Ping/Info handshake automatically
 - Includes reusable `CRSFProtocol` library under `lib/`
+
+## Why another CRSF library?
+
+Existing libraries are built for the **receiver side** — reading channels from an ELRS/Crossfire RX. Acting as a **TX module in the JR bay** requires features none of them support:
+
+| Feature | [CRSFforArduino](https://github.com/ZZ-Cat/CRSFforArduino) | [AlfredoCRSF](https://github.com/AlfredoSystems/AlfredoCRSF) | [ESP_CRSF](https://github.com/DamianK77/ESP_CRSF) | **CRSFProtocol** |
+|---------|:---:|:---:|:---:|:---:|
+| Read RC channels | yes | yes | yes | yes |
+| Send telemetry | yes | - | partial | yes |
+| Half-duplex single pin | - | - | - | yes |
+| Inverted signal (JR bay) | - | - | - | yes |
+| EdgeTX Device Ping handshake | - | - | - | yes |
+| Link Stats (enables streaming) | - | - | - | yes |
+| ESP32-C3 support | untested | untested | ESP-IDF only | yes |
+| Framework | Arduino | Arduino | ESP-IDF | Arduino |
+| License | AGPL-3.0 | GPL-3.0 | - | MIT |
+
+The hard parts — half-duplex GPIO matrix switching, inverted signal handling, the [undocumented EdgeTX handshake](https://github.com/EdgeTX/edgetx/blob/main/radio/src/telemetry/crossfire.cpp), and the link stats requirement for sensor discovery — are the 80% of the problem. Building telemetry frames is the easy part. `CRSFProtocol` fills this gap.
 
 ## Hardware
 
