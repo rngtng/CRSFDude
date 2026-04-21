@@ -1,6 +1,6 @@
 # CRSFDude
 
-ESP32-C3 firmware that acts as a CRSF external module in a JR bay. Reads RC channels from the radio over half-duplex inverted UART and sends telemetry back.
+An Arduino/PlatformIO library for building CRSF external modules on ESP32-C3. Handles half-duplex inverted UART, RC channel decoding, telemetry TX, and the EdgeTX handshake — so you can focus on your application.
 
 ## Features
 
@@ -8,7 +8,7 @@ ESP32-C3 firmware that acts as a CRSF external module in a JR bay. Reads RC chan
 - Decodes all 16 RC channels (packed 11-bit)
 - Sends telemetry back to EdgeTX (flight mode, battery, etc.)
 - Handles EdgeTX Device Ping/Info handshake automatically
-- Includes reusable `CRSFDude` library under `lib/`
+- Installable as PlatformIO library dependency
 
 ### Why another CRSF library?
 
@@ -57,9 +57,15 @@ graph LR
     BAY -- "Pin 5 → S.PORT<br/>CRSF - Half-Duplex<br/>Inverted UART, 420kbaud" --- ESP
 ```
 
-## Library
+## Installation
 
-Reusable library in `lib/CRSFDude/`. Handles all protocol internals:
+Add to your `platformio.ini`:
+
+```ini
+lib_deps = https://github.com/rngtng/CRSFDude.git
+```
+
+## Quick Start
 
 ```cpp
 #include "CRSFDude.h"
@@ -115,25 +121,13 @@ These are the sensor names that appear in EdgeTX after discovery:
 
 ## Development
 
-### Build & Flash
-
 ```bash
-pio run -e esp32c3 -t upload
+pio test -e native              # run tests (no device needed)
+pio run -e esp32c3 -t upload    # build & flash example
+pio device monitor              # serial monitor
 ```
 
-### Test
-
-```bash
-pio test -e native
-```
-
-### Monitor
-
-```bash
-pio device monitor
-```
-
-Output:
+Example output:
 
 ```
 CRSFDude starting...

@@ -13,11 +13,9 @@ pio test -e esp32c3             # run integration tests on device
 
 ## Architecture
 
-ESP32-C3 firmware acting as a CRSF external module in a JR bay. Single-wire half-duplex on GPIO 20.
+Arduino/PlatformIO library for building CRSF external modules on ESP32-C3. Single-wire half-duplex on a JR bay.
 
-**`src/main.cpp`** — Application loop: polls for RC data, sends telemetry every 5th packet, prints channel values and model ID.
-
-**`lib/CRSFDude/`** — Reusable library handling all protocol internals:
+**`src/CRSFDude.h/.cpp`** — Library source:
 - Frame parsing with CRC8 validation (polynomial 0xD5)
 - 16-channel decoding (packed 11-bit)
 - Half-duplex TX/RX switching via ESP32-C3 GPIO matrix
@@ -25,6 +23,8 @@ ESP32-C3 firmware acting as a CRSF external module in a JR bay. Single-wire half
 - Telemetry TX: flight mode, battery, GPS, attitude, baro, vario, link stats
 - Model ID tracking (radio tells module which model is active)
 - Callbacks: `onChannelsReceived`, `onModelIdChanged`, `onDevicePing`
+
+**`examples/basic/`** — Example firmware showing RC channel reading + telemetry TX.
 
 **`test/test_native/`** — Host-side unit tests (CRC, channel encode/decode, frame encoding). Run via `pio test -e native`.
 
