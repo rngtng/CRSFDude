@@ -78,9 +78,11 @@ public:
     // Callback: called when Device Ping received (default: auto-responds with device info)
     void (*onDevicePing)() = nullptr;
 
+    // CRC8 utility (public for custom frame building)
+    static uint8_t crc8(const uint8_t *data, uint16_t length);
+
 private:
     static uint8_t crc8_table[256];
-    static uint8_t crc8(const uint8_t *data, uint16_t length);
 
     // Half-duplex GPIO matrix switching
     uint8_t _pin = 0;
