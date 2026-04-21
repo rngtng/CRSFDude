@@ -22,7 +22,7 @@ Arduino/PlatformIO library for building CRSF external modules on ESP32-C3. Singl
 - EdgeTX Device Ping/Info handshake (auto-response)
 - Telemetry TX: flight mode, battery, GPS, attitude, baro, vario, link stats
 - Model ID tracking (radio tells module which model is active)
-- Callbacks: `onChannelsReceived`, `onModelIdChanged`, `onDevicePing`
+- Callbacks: `onModelIdChanged`, `onDevicePing`
 
 **`examples/basic/`** — Example firmware showing RC channel reading + telemetry TX.
 

@@ -135,7 +135,7 @@ void CRSFDude::sendFrame(const uint8_t *frame, uint8_t length)
 {
     halfDuplexEnableTX(_pin);
     uart_write_bytes(UART_NUM_1, (const char *)frame, length);
-    uart_wait_tx_done(UART_NUM_1, pdMS_TO_TICKS(20));
+    uart_wait_tx_done(UART_NUM_1, 20 / portTICK_PERIOD_MS);
     gpio_reset_pin((gpio_num_t)_pin);
     halfDuplexEnableRX(_pin);
     uart_ll_rxfifo_rst(UART_LL_GET_HW(1));
