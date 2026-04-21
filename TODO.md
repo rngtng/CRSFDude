@@ -6,7 +6,6 @@
 - [ ] Add `onChannelsReceived` callback as alternative to polling `update()`
 - [ ] Support ESP32 original (GPIO matrix behaves differently — no `gpio_reset_pin()` needed)
 - [ ] Publish to PlatformIO registry
-- [ ] Add `sendLinkStats()` with sensible defaults (e.g. `sendLinkStatsDefault()`)
 
 ## Telemetry
 
@@ -17,15 +16,9 @@
 ## Protocol
 
 - [ ] Respond to REQUEST_SETTINGS (0x2A) for LUA script compatibility
-- [ ] Handle COMMAND frames (0x32)
-- [ ] Support Model ID frame from radio
+- [x] Handle COMMAND frames (0x32)
+- [x] Support Model ID frame from radio (`modelId` + `onModelIdChanged` callback)
 - [ ] Allow configurable device name for Device Info response
-
-## Testing
-
-- [x] Unit tests for CRC8, frame building, channel decoding (`pio test -e native`)
-- [x] CI workflow for native tests (GitHub Actions)
-- [x] Document expected EdgeTX sensor names for each telemetry type
 
 ## Ideas
 

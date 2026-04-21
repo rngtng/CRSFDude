@@ -115,6 +115,15 @@ void CRSFDude::processFrame(uint8_t frameType, uint8_t totalLength)
             sendDeviceInfo("CRSFDude");
         }
     }
+    else if (frameType == CRSF_FRAMETYPE_COMMAND && totalLength >= 8) {
+        // Command frame: [sync][len][type=0x32][dest][origin][subcmd][cmd][payload...][crc_ba][crc]
+        uint8_t subCommand = _parseBuffer[5];
+        uint8_t command = _parseBuffer[6];
+        if (subCommand == CRSF_SUBCOMMAND_CRSF && command == CRSF_COMMAND_MODEL_SELECT_ID) {
+            modelId = _parseBuffer[7];
+            if (onModelIdChanged) onModelIdChanged(modelId);
+        }
+    }
 }
 
 uint16_t CRSFDude::getChannel(uint8_t ch) const
