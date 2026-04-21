@@ -108,6 +108,31 @@ void loop() {
 | `sendVario(cm/s)` | Vertical speed in cm/s |
 | `sendDeviceInfo(name)` | Device info (auto-called on Device Ping) |
 | `sendFrame(buf, len)` | Send raw CRSF frame |
+| `onChannelsReceived` | Callback fired when new RC channel data is decoded |
+| `onDevicePing` | Callback for Device Ping (default: auto-responds with device info) |
+
+### Callback Example
+
+Instead of polling `update()`, use callbacks for event-driven code:
+
+```cpp
+CRSFDude crsf;
+
+void handleChannels() {
+    Serial.printf("CH1: %u  CH2: %u\n", crsf.getChannel(0), crsf.getChannel(1));
+    crsf.sendLinkStatsDefault();
+    crsf.sendFlightMode("ACRO");
+}
+
+void setup() {
+    crsf.begin(20, 420000);
+    crsf.onChannelsReceived = handleChannels;
+}
+
+void loop() {
+    crsf.update();
+}
+```
 
 ### EdgeTX Sensor Names
 
