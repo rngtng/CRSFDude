@@ -2,27 +2,33 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Build & Flash
+## Build, Flash & Test
 
 ```bash
 pio run -e esp32c3 -t upload    # build and flash
 pio device monitor              # serial monitor (115200 baud)
+pio test -e native              # run unit tests on host (no device needed)
+pio test -e esp32c3             # run integration tests on device
 ```
-
-No test harness — this is embedded firmware. Verify by flashing and checking serial output for `[rx:N tx:N /s]` counters.
 
 ## Architecture
 
 ESP32-C3 firmware acting as a CRSF external module in a JR bay. Single-wire half-duplex on GPIO 20.
 
-**`src/main.cpp`** — Application loop: polls for RC data, sends telemetry every 5th packet, prints channel values.
+**`src/main.cpp`** — Application loop: polls for RC data, sends telemetry every 5th packet, prints channel values and model ID.
 
 **`lib/CRSFDude/`** — Reusable library handling all protocol internals:
 - Frame parsing with CRC8 validation (polynomial 0xD5)
 - 16-channel decoding (packed 11-bit)
 - Half-duplex TX/RX switching via ESP32-C3 GPIO matrix
 - EdgeTX Device Ping/Info handshake (auto-response)
-- Telemetry frame building (flight mode, device info, raw frames)
+- Telemetry TX: flight mode, battery, GPS, attitude, baro, vario, link stats
+- Model ID tracking (radio tells module which model is active)
+- Callbacks: `onChannelsReceived`, `onModelIdChanged`, `onDevicePing`
+
+**`test/test_native/`** — Host-side unit tests (CRC, channel encode/decode, frame encoding). Run via `pio test -e native`.
+
+**`test/test_embedded/`** — On-device tests. Run via `pio test -e esp32c3`.
 
 ## Critical Constraints
 
