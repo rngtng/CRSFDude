@@ -1,10 +1,10 @@
 #include <Arduino.h>
-#include "CRSFProtocol.h"
+#include "CRSFDude.h"
 
 #define CRSF_PIN  20
 #define CRSF_BAUD 420000
 
-CRSFProtocol crsf;
+CRSFDude crsf;
 
 static uint32_t lastReportTime = 0;
 

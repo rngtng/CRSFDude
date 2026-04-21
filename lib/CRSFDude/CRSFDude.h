@@ -27,7 +27,7 @@
 #define CRSF_ADDRESS_RADIO          0xEA
 #define CRSF_ADDRESS_MODULE         0xEE
 
-class CRSFProtocol {
+class CRSFDude {
 public:
     // Initialize UART and half-duplex on given pin
     void begin(uint8_t pin, uint32_t baudRate = 420000);

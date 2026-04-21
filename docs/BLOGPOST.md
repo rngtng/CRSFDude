@@ -83,7 +83,7 @@ Voila! Radio stays happy. RC channels keep flowing, telemetry shows up, no freez
 
 ## What I ended up with
 
-A reusable [`CRSFProtocol` library](https://github.com/rngtng/CRSFDude) for ESP32-C3 that handles all the gnarly bits:
+A reusable [`CRSFDude` library](https://github.com/rngtng/CRSFDude) for ESP32-C3 that handles all the gnarly bits:
 
 - CRC8 calculation + frame parsing
 - All 16 RC channels (packed 11-bit decoding)
@@ -94,7 +94,7 @@ A reusable [`CRSFProtocol` library](https://github.com/rngtng/CRSFDude) for ESP3
 The actual application? ~40 lines:
 
 ```cpp
-CRSFProtocol crsf;
+CRSFDude crsf;
 
 void setup() {
     crsf.begin(20, 420000);

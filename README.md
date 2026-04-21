@@ -26,13 +26,13 @@ graph LR
 - Decodes all 16 RC channels (packed 11-bit)
 - Sends telemetry back to EdgeTX (flight mode, battery, etc.)
 - Handles EdgeTX Device Ping/Info handshake automatically
-- Includes reusable `CRSFProtocol` library under `lib/`
+- Includes reusable `CRSFDude` library under `lib/`
 
 ## Why another CRSF library?
 
 Existing libraries are built for the **receiver side** — reading channels from an ELRS/Crossfire RX. Acting as a **TX module in the JR bay** requires features none of them support:
 
-| Feature | [CRSFforArduino](https://github.com/ZZ-Cat/CRSFforArduino) | [AlfredoCRSF](https://github.com/AlfredoSystems/AlfredoCRSF) | [ESP_CRSF](https://github.com/DamianK77/ESP_CRSF) | **CRSFProtocol** |
+| Feature | [CRSFforArduino](https://github.com/ZZ-Cat/CRSFforArduino) | [AlfredoCRSF](https://github.com/AlfredoSystems/AlfredoCRSF) | [ESP_CRSF](https://github.com/DamianK77/ESP_CRSF) | **CRSFDude** |
 |---------|:---:|:---:|:---:|:---:|
 | Read RC channels | yes | yes | yes | yes |
 | Send telemetry | yes | - | partial | yes |
@@ -44,7 +44,7 @@ Existing libraries are built for the **receiver side** — reading channels from
 | Framework | Arduino | Arduino | ESP-IDF | Arduino |
 | License | AGPL-3.0 | GPL-3.0 | - | MIT |
 
-The hard parts — half-duplex GPIO matrix switching, inverted signal handling, the [undocumented EdgeTX handshake](https://github.com/EdgeTX/edgetx/blob/main/radio/src/telemetry/crossfire.cpp), and the link stats requirement for sensor discovery — are the 80% of the problem. Building telemetry frames is the easy part. `CRSFProtocol` fills this gap.
+The hard parts — half-duplex GPIO matrix switching, inverted signal handling, the [undocumented EdgeTX handshake](https://github.com/EdgeTX/edgetx/blob/main/radio/src/telemetry/crossfire.cpp), and the link stats requirement for sensor discovery — are the 80% of the problem. Building telemetry frames is the easy part. `CRSFDude` fills this gap.
 
 ## Hardware
 
@@ -70,14 +70,14 @@ CRSFDude starting...
 CH1:  992  CH2: 1024  CH3:  998  CH4:  992  [rx:150 tx:30 /s]
 ```
 
-## CRSFProtocol Library
+## CRSFDude Library
 
-Reusable library in `lib/CRSFProtocol/`. Handles all protocol internals:
+Reusable library in `lib/CRSFDude/`. Handles all protocol internals:
 
 ```cpp
-#include "CRSFProtocol.h"
+#include "CRSFDude.h"
 
-CRSFProtocol crsf;
+CRSFDude crsf;
 
 void setup() {
     crsf.begin(20, 420000);  // pin, baud

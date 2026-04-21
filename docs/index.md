@@ -14,9 +14,9 @@ Custom CRSF external module for ESP32-C3 — reads RC channels and sends telemet
 ## Quick Start
 
 ```cpp
-#include "CRSFProtocol.h"
+#include "CRSFDude.h"
 
-CRSFProtocol crsf;
+CRSFDude crsf;
 
 void setup() {
     crsf.begin(20, 420000);

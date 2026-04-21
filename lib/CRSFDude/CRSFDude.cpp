@@ -1,10 +1,10 @@
-#include "CRSFProtocol.h"
+#include "CRSFDude.h"
 #include <string.h>
 
 // Static members
-uint8_t CRSFProtocol::crc8_table[256];
+uint8_t CRSFDude::crc8_table[256];
 
-uint8_t CRSFProtocol::crc8(const uint8_t *data, uint16_t length)
+uint8_t CRSFDude::crc8(const uint8_t *data, uint16_t length)
 {
     uint8_t crc = 0;
     while (length--)
@@ -13,20 +13,20 @@ uint8_t CRSFProtocol::crc8(const uint8_t *data, uint16_t length)
 }
 
 // Half-duplex: inverted single-wire via GPIO matrix (mLRS pattern)
-void CRSFProtocol::halfDuplexEnableRX(uint8_t pin)
+void CRSFDude::halfDuplexEnableRX(uint8_t pin)
 {
     gpio_set_pull_mode((gpio_num_t)pin, GPIO_PULLDOWN_ONLY);
     gpio_set_direction((gpio_num_t)pin, GPIO_MODE_INPUT);
     gpio_matrix_in((gpio_num_t)pin, U1RXD_IN_IDX, true);
 }
 
-void CRSFProtocol::halfDuplexEnableTX(uint8_t pin)
+void CRSFDude::halfDuplexEnableTX(uint8_t pin)
 {
     uart_set_pin(UART_NUM_1, pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     gpio_matrix_out((gpio_num_t)pin, U1TXD_OUT_IDX, true, false);
 }
 
-void CRSFProtocol::begin(uint8_t pin, uint32_t baudRate)
+void CRSFDude::begin(uint8_t pin, uint32_t baudRate)
 {
     _pin = pin;
 
@@ -43,7 +43,7 @@ void CRSFProtocol::begin(uint8_t pin, uint32_t baudRate)
     halfDuplexEnableRX(pin);
 }
 
-bool CRSFProtocol::update()
+bool CRSFDude::update()
 {
     int available = _serial.available();
     if (available <= 0) return false;
@@ -86,7 +86,7 @@ bool CRSFProtocol::update()
     return gotChannels;
 }
 
-void CRSFProtocol::processFrame(uint8_t frameType, uint8_t totalLength)
+void CRSFDude::processFrame(uint8_t frameType, uint8_t totalLength)
 {
     if (frameType == CRSF_FRAMETYPE_RC_CHANNELS && totalLength >= 26) {
         rxPacketCount++;
@@ -117,12 +117,12 @@ void CRSFProtocol::processFrame(uint8_t frameType, uint8_t totalLength)
     }
 }
 
-uint16_t CRSFProtocol::getChannel(uint8_t ch) const
+uint16_t CRSFDude::getChannel(uint8_t ch) const
 {
     return (ch < 16) ? _channels[ch] : 0;
 }
 
-void CRSFProtocol::sendFrame(const uint8_t *frame, uint8_t length)
+void CRSFDude::sendFrame(const uint8_t *frame, uint8_t length)
 {
     halfDuplexEnableTX(_pin);
     uart_write_bytes(UART_NUM_1, (const char *)frame, length);
@@ -135,7 +135,7 @@ void CRSFProtocol::sendFrame(const uint8_t *frame, uint8_t length)
 }
 
 // Helper: write sync + length + type, return position after type
-uint8_t CRSFProtocol::buildFrameHeader(uint8_t *frame, uint8_t type, uint8_t payloadLength)
+uint8_t CRSFDude::buildFrameHeader(uint8_t *frame, uint8_t type, uint8_t payloadLength)
 {
     frame[0] = CRSF_SYNC_BYTE;
     frame[1] = payloadLength + 2; // type + payload + crc
@@ -143,7 +143,7 @@ uint8_t CRSFProtocol::buildFrameHeader(uint8_t *frame, uint8_t type, uint8_t pay
     return 3;
 }
 
-void CRSFProtocol::sendDeviceInfo(const char *deviceName)
+void CRSFDude::sendDeviceInfo(const char *deviceName)
 {
     uint8_t nameLength = strlen(deviceName) + 1;
     uint8_t frame[48];
@@ -163,7 +163,7 @@ void CRSFProtocol::sendDeviceInfo(const char *deviceName)
     sendFrame(frame, pos);
 }
 
-void CRSFProtocol::sendFlightMode(const char *mode)
+void CRSFDude::sendFlightMode(const char *mode)
 {
     uint8_t stringLength = strlen(mode) + 1;
     uint8_t frame[32];
@@ -173,7 +173,7 @@ void CRSFProtocol::sendFlightMode(const char *mode)
     sendFrame(frame, pos);
 }
 
-void CRSFProtocol::sendBattery(uint16_t voltage, uint16_t current, uint32_t capacity, uint8_t remaining)
+void CRSFDude::sendBattery(uint16_t voltage, uint16_t current, uint32_t capacity, uint8_t remaining)
 {
     // Payload: voltage(2) + current(2) + capacity(3) + remaining(1) = 8 bytes
     uint8_t frame[12];
@@ -190,7 +190,7 @@ void CRSFProtocol::sendBattery(uint16_t voltage, uint16_t current, uint32_t capa
     sendFrame(frame, pos);
 }
 
-void CRSFProtocol::sendGPS(int32_t latitude, int32_t longitude, uint16_t groundspeed,
+void CRSFDude::sendGPS(int32_t latitude, int32_t longitude, uint16_t groundspeed,
                             uint16_t heading, uint16_t altitude, uint8_t satellites)
 {
     // Payload: lat(4) + lon(4) + speed(2) + heading(2) + alt(2) + sats(1) = 15 bytes
@@ -215,7 +215,7 @@ void CRSFProtocol::sendGPS(int32_t latitude, int32_t longitude, uint16_t grounds
     sendFrame(frame, pos);
 }
 
-void CRSFProtocol::sendAttitude(int16_t pitch, int16_t roll, int16_t yaw)
+void CRSFDude::sendAttitude(int16_t pitch, int16_t roll, int16_t yaw)
 {
     // Payload: pitch(2) + roll(2) + yaw(2) = 6 bytes
     uint8_t frame[10];
@@ -230,7 +230,7 @@ void CRSFProtocol::sendAttitude(int16_t pitch, int16_t roll, int16_t yaw)
     sendFrame(frame, pos);
 }
 
-void CRSFProtocol::sendBaroAltitude(int32_t altitudeCm)
+void CRSFDude::sendBaroAltitude(int32_t altitudeCm)
 {
     // Payload: altitude(2) = 2 bytes. Value in decimeters + 10000dm offset
     uint8_t frame[6];
@@ -242,7 +242,7 @@ void CRSFProtocol::sendBaroAltitude(int32_t altitudeCm)
     sendFrame(frame, pos);
 }
 
-void CRSFProtocol::sendVario(int16_t verticalSpeed)
+void CRSFDude::sendVario(int16_t verticalSpeed)
 {
     // Payload: vspeed(2) = 2 bytes, in cm/s
     uint8_t frame[6];
@@ -253,7 +253,7 @@ void CRSFProtocol::sendVario(int16_t verticalSpeed)
     sendFrame(frame, pos);
 }
 
-void CRSFProtocol::sendLinkStats(uint8_t rxRssi1, uint8_t rxRssi2, uint8_t rxQuality, int8_t rxSnr,
+void CRSFDude::sendLinkStats(uint8_t rxRssi1, uint8_t rxRssi2, uint8_t rxQuality, int8_t rxSnr,
                                   uint8_t antenna, uint8_t rfMode, uint8_t txPower,
                                   uint8_t txRssi, uint8_t txQuality, int8_t txSnr)
 {
@@ -274,7 +274,7 @@ void CRSFProtocol::sendLinkStats(uint8_t rxRssi1, uint8_t rxRssi2, uint8_t rxQua
     sendFrame(frame, pos);
 }
 
-void CRSFProtocol::alignBufferToSync()
+void CRSFDude::alignBufferToSync()
 {
     uint8_t i = 1;
     while (i < _parseBufferLen && !isSyncByte(_parseBuffer[i])) i++;

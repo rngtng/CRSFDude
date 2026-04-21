@@ -17,7 +17,7 @@ ESP32-C3 firmware acting as a CRSF external module in a JR bay. Single-wire half
 
 **`src/main.cpp`** — Application loop: polls for RC data, sends telemetry every 5th packet, prints channel values.
 
-**`lib/CRSFProtocol/`** — Reusable library handling all protocol internals:
+**`lib/CRSFDude/`** — Reusable library handling all protocol internals:
 - Frame parsing with CRC8 validation (polynomial 0xD5)
 - 16-channel decoding (packed 11-bit)
 - Half-duplex TX/RX switching via ESP32-C3 GPIO matrix
