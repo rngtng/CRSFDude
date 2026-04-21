@@ -23,7 +23,7 @@
 
 ## Testing
 
-- [ ] Unit tests for CRC8, frame building, channel decoding (host-side, no hardware)
+- [x] Unit tests for CRC8, frame building, channel decoding (`pio test -e esp32c3`)
 - [ ] Loopback test mode (TX→RX on same device for CI)
 - [ ] Document expected EdgeTX sensor names for each telemetry type
 
