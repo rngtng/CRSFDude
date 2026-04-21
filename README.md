@@ -2,26 +2,6 @@
 
 ESP32-C3 firmware that acts as a CRSF external module in a JR bay. Reads RC channels from the radio over half-duplex inverted UART and sends telemetry back.
 
-## Architecture
-
-```mermaid
-graph LR
-    subgraph "EdgeTX Radio"
-        direction TB
-        Radio[External RF<br/>JR bay]
-    end
-
-    Radio -- "Pin 3 → VBat" --- DC[Step-Down<br/>to 3.3V] -- "3V3" --- ESP[ESP32-C3<br/>CRSFDude]
-    Radio -- "Pin 4 → GND" --- ESP
-
-    subgraph "Pin 5 → S.PORT"
-        direction LR
-        HD[CRSF<br/>Half-Duplex<br/>Inverted UART<br/>420kbaud]
-    end
-
-    Radio --- HD -- "GPIO 20" --- ESP
-```
-
 ## Features
 
 - Single-wire half-duplex CRSF on GPIO 20 (inverted signal, 420kbaud)
@@ -30,7 +10,7 @@ graph LR
 - Handles EdgeTX Device Ping/Info handshake automatically
 - Includes reusable `CRSFDude` library under `lib/`
 
-## Why another CRSF library?
+### Why another CRSF library?
 
 Existing libraries are built for the **receiver side** — reading channels from an ELRS/Crossfire RX. Acting as a **TX module in the JR bay** requires features none of them support:
 
@@ -50,30 +30,34 @@ The hard parts — half-duplex GPIO matrix switching, inverted signal handling, 
 
 ## Hardware
 
-- **Board:** ESP32-C3 DevKit
+Only three JR bay pins are needed (Pin 1 and Pin 2 are unused):
+
+- **Radio:** EdgeTX-compatible with external RF (JR bay)
+- **Board:** ESP32-C3 DevKit (others to be tested)
 - **Pin 3 (VBat):** Radio battery voltage — needs a step-down converter (buck/LDO) to 3.3V for the ESP32-C3
 - **Pin 4 (GND):** Ground
-- **Pin 5 (S.PORT):** GPIO 20 — CRSF half-duplex, inverted UART, 420kbaud, 8N1
+- **Pin 5 (S.PORT):** CRSF half-duplex, inverted UART, 420kbaud, 8N1
 
-## Build & Flash
+```mermaid
+graph LR
+    subgraph Radio [EdgeTX Radio]
+        BAY[External RF<br/>JR bay]
+    end
 
-```bash
-pio run -e esp32c3 -t upload
+    subgraph STEP[Step-Down Converter]
+        DC[DC/DC<br/>]
+    end
+
+    subgraph ESP [ESP32-C3]
+        CRSFDude
+    end
+
+    BAY -- "Pin 3 → VBat" --- STEP -- "3.3V/5V" --- ESP
+    BAY -- "Pin 4 → GND" --- ESP
+    BAY -- "Pin 5 → S.PORT<br/>CRSF - Half-Duplex<br/>Inverted UART, 420kbaud" --- ESP
 ```
 
-## Monitor
-
-```bash
-pio device monitor
-```
-
-Output:
-```
-CRSFDude starting...
-CH1:  992  CH2: 1024  CH3:  998  CH4:  992  [rx:150 tx:30 /s]
-```
-
-## CRSFDude Library
+## Library
 
 Reusable library in `lib/CRSFDude/`. Handles all protocol internals:
 
@@ -129,10 +113,44 @@ These are the sensor names that appear in EdgeTX after discovery:
 | `sendBaroAltitude()` | Alt | m |
 | `sendVario()` | VSpd | m/s |
 
-## Key Learnings
+## Development
 
-1. **Signal is inverted** on JR bay S.PORT — EdgeTX radios have a hardware inverter IC
-2. **GPIO matrix** handles inversion and half-duplex pin switching on ESP32-C3 (no `uart_set_line_inverse`)
-3. **`gpio_reset_pin()` required** on ESP32-C3 to fully release the TX output after sending
-4. **EdgeTX handshake** is mandatory — radio sends Device Ping (0x28) after detecting telemetry; must respond with Device Info (0x29) or radio freezes permanently
-5. **Link stats required for sensor discovery** — EdgeTX silently drops all telemetry (except flight mode) unless Link Statistics (0x14) with non-zero RxQuality has been received
+### Build & Flash
+
+```bash
+pio run -e esp32c3 -t upload
+```
+
+### Test
+
+```bash
+pio test -e native
+```
+
+### Monitor
+
+```bash
+pio device monitor
+```
+
+Output:
+
+```
+CRSFDude starting...
+CH1:  992  CH2: 1024  CH3:  998  CH4:  992  [rx:150 tx:30 /s]
+```
+
+## Limitations / Known Issues
+
+- **ESP32-C3 only** — GPIO matrix behavior differs on original ESP32 and S3; untested on those
+- **One telemetry frame per TX window** — sending multiple frames back-to-back causes collisions with the radio's next RC packet; rotate sensor types across cycles
+- **UART1 hardcoded** — works for ESP32-C3 (UART0 is USB), but limits flexibility on other boards
+- **No LUA script support** — radio can't configure the module from its UI (REQUEST_SETTINGS not implemented)
+- **No channel-to-PWM output** — library decodes channels but doesn't drive servos/ESCs
+
+See [TODO.md](TODO.md) for planned improvements.
+
+## Further Reading
+
+- [Blog Post](https://www.rngtng.com/CRSFDude/BLOGPOST) — the full story: inverted signals, half-duplex hell, frozen radios, and the undocumented EdgeTX handshake
+- [Retro](https://www.rngtng.com/CRSFDude/RETRO) — what went well, what didn't, lessons learned
