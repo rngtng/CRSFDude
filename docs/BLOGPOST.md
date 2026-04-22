@@ -17,7 +17,7 @@ So I had this idea — plug an ESP32-C3 into the JR bay of my EdgeTX radio, read
 
 CRSF is a serial protocol. 420000 baud, 8N1. Frames start with a sync byte (0xC8), followed by length, type, payload, CRC8. Straightforward stuff.
 
-Wired GPIO 20 to the JR bay signal pin, `HardwareSerial.begin()`, and... garbage. Built an auto-detect that scans baud rates and validates CRC — nothing at any rate. Hmm.
+Wired GPIO 21 to the JR bay signal pin, `HardwareSerial.begin()`, and... garbage. Built an auto-detect that scans baud rates and validates CRC — nothing at any rate. Hmm.
 
 Turns out the signal is **inverted**! EdgeTX radios have a hardware inverter IC on the S.PORT line. The [CRSF spec](https://github.com/crsf-wg/crsf/wiki/Physical-Layer) even says it: *"Half duplex connections are typically INVERTED polarity (idle low)."* Would've been nice to read that first ;)
 

@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include "CRSFDude.h"
 
-#define CRSF_PIN  20
+#define CRSF_PIN  21
 #define CRSF_BAUD 420000
 
 CRSFDude crsf;

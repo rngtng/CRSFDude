@@ -1,15 +1,9 @@
 #include "CRSFDude.h"
 #include <string.h>
 
-// Static members
-uint8_t CRSFDude::crc8_table[256];
-
 uint8_t CRSFDude::crc8(const uint8_t *data, uint16_t length)
 {
-    uint8_t crc = 0;
-    while (length--)
-        crc = crc8_table[crc ^ *data++];
-    return crc;
+    return crsfCrc8(data, length);
 }
 
 // Half-duplex: inverted single-wire via GPIO matrix (mLRS pattern)
@@ -30,13 +24,7 @@ void CRSFDude::begin(uint8_t pin, uint32_t baudRate)
 {
     _pin = pin;
 
-    // Init CRC8 lookup table
-    for (uint16_t i = 0; i < 256; i++) {
-        uint8_t crc = i;
-        for (uint8_t j = 0; j < 8; j++)
-            crc = (crc << 1) ^ ((crc & 0x80) ? CRSF_CRC_POLY : 0);
-        crc8_table[i] = crc;
-    }
+    crsfCrc8Init();
 
     _serial.begin(baudRate, SERIAL_8N1, pin, pin);
     _serial.setTimeout(0);
@@ -90,23 +78,7 @@ void CRSFDude::processFrame(uint8_t frameType, uint8_t totalLength)
 {
     if (frameType == CRSF_FRAMETYPE_RC_CHANNELS && totalLength >= 26) {
         rxPacketCount++;
-        const uint8_t *p = &_parseBuffer[3];
-        _channels[0]  = ((uint16_t)p[0]      | (uint16_t)p[1]  << 8) & 0x07FF;
-        _channels[1]  = ((uint16_t)p[1] >> 3  | (uint16_t)p[2]  << 5) & 0x07FF;
-        _channels[2]  = ((uint16_t)p[2] >> 6  | (uint16_t)p[3]  << 2 | (uint16_t)p[4] << 10) & 0x07FF;
-        _channels[3]  = ((uint16_t)p[4] >> 1  | (uint16_t)p[5]  << 7) & 0x07FF;
-        _channels[4]  = ((uint16_t)p[5] >> 4  | (uint16_t)p[6]  << 4) & 0x07FF;
-        _channels[5]  = ((uint16_t)p[6] >> 7  | (uint16_t)p[7]  << 1 | (uint16_t)p[8] << 9) & 0x07FF;
-        _channels[6]  = ((uint16_t)p[8] >> 2  | (uint16_t)p[9]  << 6) & 0x07FF;
-        _channels[7]  = ((uint16_t)p[9] >> 5  | (uint16_t)p[10] << 3) & 0x07FF;
-        _channels[8]  = ((uint16_t)p[11]      | (uint16_t)p[12] << 8) & 0x07FF;
-        _channels[9]  = ((uint16_t)p[12] >> 3 | (uint16_t)p[13] << 5) & 0x07FF;
-        _channels[10] = ((uint16_t)p[13] >> 6 | (uint16_t)p[14] << 2 | (uint16_t)p[15] << 10) & 0x07FF;
-        _channels[11] = ((uint16_t)p[15] >> 1 | (uint16_t)p[16] << 7) & 0x07FF;
-        _channels[12] = ((uint16_t)p[16] >> 4 | (uint16_t)p[17] << 4) & 0x07FF;
-        _channels[13] = ((uint16_t)p[17] >> 7 | (uint16_t)p[18] << 1 | (uint16_t)p[19] << 9) & 0x07FF;
-        _channels[14] = ((uint16_t)p[19] >> 2 | (uint16_t)p[20] << 6) & 0x07FF;
-        _channels[15] = ((uint16_t)p[20] >> 5 | (uint16_t)p[21] << 3) & 0x07FF;
+        crsfDecodeChannels(&_parseBuffer[3], _channels);
     }
     else if (frameType == CRSF_FRAMETYPE_DEVICE_PING) {
         if (onDevicePing) {

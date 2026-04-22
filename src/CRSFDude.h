@@ -3,34 +3,7 @@
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "hal/uart_ll.h"
-
-// CRSF Protocol Constants
-#define CRSF_SYNC_BYTE          0xC8
-#define CRSF_SYNC_BYTE_MODULE   0xEE
-#define CRSF_MAX_PACKET_LEN     64
-#define CRSF_MIN_PACKET_LEN     4
-#define CRSF_CRC_POLY           0xD5
-
-// Frame types
-#define CRSF_FRAMETYPE_GPS          0x02
-#define CRSF_FRAMETYPE_VARIO        0x07
-#define CRSF_FRAMETYPE_BATTERY      0x08
-#define CRSF_FRAMETYPE_BARO_ALT     0x09
-#define CRSF_FRAMETYPE_LINK_STATS   0x14
-#define CRSF_FRAMETYPE_RC_CHANNELS  0x16
-#define CRSF_FRAMETYPE_ATTITUDE     0x1E
-#define CRSF_FRAMETYPE_FLIGHT_MODE  0x21
-#define CRSF_FRAMETYPE_DEVICE_PING  0x28
-#define CRSF_FRAMETYPE_DEVICE_INFO  0x29
-#define CRSF_FRAMETYPE_COMMAND      0x32
-
-// Command sub-types
-#define CRSF_SUBCOMMAND_CRSF           0x10
-#define CRSF_COMMAND_MODEL_SELECT_ID   0x05
-
-// Addresses
-#define CRSF_ADDRESS_RADIO          0xEA
-#define CRSF_ADDRESS_MODULE         0xEE
+#include "crsf_protocol.h"
 
 class CRSFDude {
 public:
@@ -91,8 +64,6 @@ public:
     static uint8_t crc8(const uint8_t *data, uint16_t length);
 
 private:
-    static uint8_t crc8_table[256];
-
     // Half-duplex GPIO matrix switching
     uint8_t _pin = 0;
     static void halfDuplexEnableRX(uint8_t pin);
@@ -111,7 +82,7 @@ private:
     void processFrame(uint8_t frameType, uint8_t totalLength);
 
     static inline bool isSyncByte(uint8_t b) {
-        return b == CRSF_SYNC_BYTE || b == CRSF_SYNC_BYTE_MODULE;
+        return crsfIsSyncByte(b);
     }
 
     HardwareSerial _serial{1};

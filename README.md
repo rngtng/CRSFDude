@@ -4,7 +4,7 @@ An Arduino/PlatformIO library for building CRSF external modules on ESP32-C3. Ha
 
 ## Features
 
-- Single-wire half-duplex CRSF on GPIO 20 (inverted signal, 420kbaud)
+- Single-wire half-duplex CRSF on GPIO 21 (inverted signal, 420kbaud)
 - Decodes all 16 RC channels (packed 11-bit)
 - Sends telemetry back to EdgeTX (flight mode, battery, etc.)
 - Handles EdgeTX Device Ping/Info handshake automatically
