@@ -144,6 +144,10 @@ CH1:  992  CH2: 1024  CH3:  998  CH4:  992  [rx:150 tx:30 /s]
 
 See [TODO.md](TODO.md) for planned improvements.
 
+## Acknowledgements
+
+This library was created with the help of AI ([Claude Code](https://claude.ai/code), Opus 4.6) and with the support and guidance of cle and ccb23.
+
 ## Further Reading
 
 - [Blog Post](https://www.rngtng.com/CRSFDude/BLOGPOST) — the full story: inverted signals, half-duplex hell, frozen radios, and the undocumented EdgeTX handshake
